@@ -1,0 +1,10 @@
+bin/
+obj/
+.dotnet/
+.nuget/
+.wasm-scaffold/
+.templateengine/
+release/
+publish-output/
+*.user
+*.suo

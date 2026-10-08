@@ -1,0 +1,76 @@
+@page "/"
+@using System.Globalization
+
+<PageTitle>Rally — Plan your match day</PageTitle>
+
+<div class="dashboard">
+    <aside class="sidebar">
+        <a class="brand" href="/" aria-label="Rally home"><span class="brand-mark">r.</span><span>rally<span class="brand-dot">.</span></span></a>
+        <div class="team-switch"><div class="team-avatar">🎾</div><div><strong>Weekend crew</strong><small>4 players</small></div><span class="chevron">⌄</span></div>
+        <div class="nav-label">WORKSPACE</div>
+        <nav class="side-nav" aria-label="Main navigation">
+            <a class="nav-item active" href="#today"><span class="nav-icon">▦</span>My day</a>
+            <a class="nav-item" href="#schedule"><span class="nav-icon">◷</span>Schedule</a>
+            <a class="nav-item" href="#players"><span class="nav-icon">♧</span>Players <span class="nav-count">4</span></a>
+        </nav>
+        <div class="sidebar-bottom"><div class="weather-card"><span class="weather-icon">☀</span><div><strong>Great day to play</strong><small>24° · Clear skies</small></div></div><div class="profile"><div class="profile-avatar">A</div><div><strong>Alex Marin</strong><small>Organizer</small></div><button class="more" aria-label="More options">···</button></div></div>
+    </aside>
+
+    <main class="main-content" id="today">
+        <header class="topbar"><button class="mobile-brand" aria-label="Rally home">r<span>.</span></button><div class="breadcrumb">Weekend crew <span>/</span> <strong>My day</strong></div><div class="top-actions"><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">A</div></div></header>
+        <div class="content-wrap">
+            <div class="page-heading"><div><div class="eyebrow">SATURDAY, OCTOBER 10, 2026 <span class="sun">☀</span></div><h1>Make today <em>count.</em></h1><p class="subheading">Your match day, all in one place.</p></div><button class="primary-button" @onclick="OpenPlanner"><span>＋</span> Plan a match</button></div>
+
+            <section class="hero-card" aria-label="Next match">
+                <div class="hero-top"><span class="live-label"><span></span> NEXT MATCH</span><button class="dots-button" aria-label="Match options">···</button></div>
+                <div class="match-main"><div><div class="match-time">10:30 <span>AM</span></div><div class="match-date">Saturday, October 10</div></div><div class="match-divider"></div><div class="match-location"><div class="court-icon">⌖</div><div><strong>Padel House</strong><small>Court 3 · 60 min</small></div></div><div class="countdown"><strong>02<span>days</span></strong><small>until first serve</small></div></div>
+                <div class="hero-bottom"><div class="attending"><div class="avatar-stack"><span class="player p1">A</span><span class="player p2">M</span><span class="player p3">J</span><span class="player p4">S</span></div><span><strong>4 players</strong> are in</span></div><button class="text-button" @onclick="ToggleDetails">@(showDetails ? "Hide details" : "Match details") <span>→</span></button></div>
+                @if (showDetails) { <div class="match-details"><div><small>TEAMS</small><strong>Alex &amp; Maya <span>vs</span> Jordan &amp; Sam</strong></div><div><small>NOTES</small><strong>Bring a new can of balls</strong></div></div> }
+            </section>
+
+            <div class="below-grid">
+                <section class="schedule-panel" id="schedule"><div class="section-heading"><div><h2>Today’s plan</h2><p>A little prep goes a long way.</p></div><button class="link-button" @onclick="OpenPlanner">View schedule <span>→</span></button></div>
+                    <div class="timeline">
+                        <div class="timeline-row"><div class="timeline-time">9:30 <small>AM</small></div><div class="timeline-track"><span class="timeline-dot muted"></span></div><div class="event-card prep"><div class="event-icon">☕</div><div class="event-copy"><strong>Easy morning</strong><small>Take it slow, hydrate &amp; fuel up</small></div><span class="event-tag">PERSONAL</span></div></div>
+                        <div class="timeline-row"><div class="timeline-time">10:00 <small>AM</small></div><div class="timeline-track"><span class="timeline-dot green"></span></div><div class="event-card warmup"><div class="event-icon">↗</div><div class="event-copy"><strong>Head to Padel House</strong><small>Allow 15 min travel · Leave by 10:00</small></div><span class="event-tag travel-tag">TRAVEL</span></div></div>
+                        <div class="timeline-row"><div class="timeline-time">10:30 <small>AM</small></div><div class="timeline-track"><span class="timeline-dot orange"></span></div><div class="event-card match-event"><div class="event-icon">🎾</div><div class="event-copy"><strong>Saturday rally</strong><small>Court 3 · Padel House</small></div><span class="event-tag match-tag">MATCH</span></div></div>
+                        <div class="timeline-row"><div class="timeline-time">12:00 <small>PM</small></div><div class="timeline-track"><span class="timeline-dot muted"></span></div><button class="add-event" @onclick="OpenPlanner"><span>＋</span> Add something after</button></div>
+                    </div>
+                </section>
+                <aside class="right-column"><section class="week-panel"><div class="section-heading compact"><div><h2>Your week</h2><p>October 5 – 11</p></div><button class="arrow-button" aria-label="Next week">→</button></div><div class="week-days">@foreach (var day in WeekDays) { <button class="day-cell @(day.Date == SelectedDay ? "selected" : "") @(day.HasMatch ? "has-match" : "")" @onclick="() => SelectDay(day.Date)"><span>@day.Label</span><strong>@day.Date.Day</strong><i></i></button> }</div><div class="week-foot"><span><i></i> Match day</span><strong>1 match planned</strong></div></section>
+                    <section class="checklist-panel"><div class="section-heading compact"><div><h2>Match checklist</h2><p>Get ready to play</p></div><span class="progress-count">@checkedItems.Count/4</span></div><div class="check-items"><label class="check-item"><input type="checkbox" checked="@checkedItems.Contains(0)" @onchange="() => ToggleCheck(0)" /><span class="checkmark"></span><span>Confirm the court booking</span></label><label class="check-item"><input type="checkbox" checked="@checkedItems.Contains(1)" @onchange="() => ToggleCheck(1)" /><span class="checkmark"></span><span>Check who’s playing</span></label><label class="check-item"><input type="checkbox" checked="@checkedItems.Contains(2)" @onchange="() => ToggleCheck(2)" /><span class="checkmark"></span><span>Pack your racket &amp; gear</span></label><label class="check-item"><input type="checkbox" checked="@checkedItems.Contains(3)" @onchange="() => ToggleCheck(3)" /><span class="checkmark"></span><span>Bring water &amp; balls</span></label></div><button class="checklist-link" @onclick="OpenPlanner">Edit checklist <span>→</span></button></section>
+                </aside>
+            </div>
+            <footer class="footer-note"><span>Made for the love of the game <span class="heart">♥</span></span><span>RALLY · YOUR PADEL PLANNER</span></footer>
+        </div>
+    </main>
+</div>
+
+<nav class="mobile-nav" aria-label="Mobile navigation"><a class="active" href="#today"><span>▦</span>Today</a><a href="#schedule"><span>◷</span>Schedule</a><a href="#players"><span>♧</span>Players</a><button @onclick="OpenPlanner"><span>＋</span>Plan</button></nav>
+
+@if (showPlanner)
+{
+    <div class="modal-backdrop" @onclick="ClosePlanner"><section class="planner-modal" @onclick:stopPropagation="true" aria-label="Plan a match"><button class="modal-close" @onclick="ClosePlanner" aria-label="Close">×</button><div class="modal-kicker">MAKE IT HAPPEN</div><h2>Plan a match</h2><p>Get your crew together for a game.</p><label>Match name<input @bind="matchName" placeholder="e.g. Saturday rally" /></label><div class="form-row"><label>Date<input type="date" @bind="matchDate" /></label><label>Start time<input type="time" @bind="matchTime" /></label></div><label>Where are you playing?<input @bind="venue" placeholder="Court or club name" /></label><button class="primary-button modal-submit" @onclick="SaveMatch">Save match <span>→</span></button></section></div>
+}
+@if (!string.IsNullOrWhiteSpace(toastMessage)) { <div class="toast">✓ &nbsp;@toastMessage</div> }
+
+@code {
+    private bool showDetails;
+    private bool showPlanner;
+    private string matchName = "Saturday rally";
+    private DateTime matchDate = new(2026, 10, 10);
+    private TimeOnly matchTime = new(10, 30);
+    private string venue = "Padel House";
+    private string? toastMessage;
+    private DateTime SelectedDay = new(2026, 10, 10);
+    private readonly HashSet<int> checkedItems = new() { 0, 1 };
+    private record DayItem(string Label, DateTime Date, bool HasMatch);
+    private IReadOnlyList<DayItem> WeekDays => Enumerable.Range(5, 7).Select(d => new DayItem(new DateTime(2026, 10, d).ToString("ddd", CultureInfo.InvariantCulture), new DateTime(2026, 10, d), d == 10)).ToList();
+    private void OpenPlanner() { showPlanner = true; toastMessage = null; }
+    private void ClosePlanner() => showPlanner = false;
+    private void ToggleDetails() => showDetails = !showDetails;
+    private void SelectDay(DateTime day) => SelectedDay = day;
+    private void ToggleCheck(int item) { if (!checkedItems.Add(item)) checkedItems.Remove(item); }
+    private void SaveMatch() { showPlanner = false; toastMessage = $"{matchName} saved — {matchDate:MMM d} at {matchTime:h:mm tt}."; _ = ClearToast(); }
+    private async Task ClearToast() { await Task.Delay(3500); toastMessage = null; await InvokeAsync(StateHasChanged); }
+}

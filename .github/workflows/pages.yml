@@ -1,0 +1,50 @@
+name: Deploy Rally to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish Blazor WebAssembly app
+        run: dotnet publish PadelMatchSync.csproj --configuration Release --output publish-output
+      - name: Configure the GitHub Pages base path
+        shell: bash
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          OWNER_NAME="${GITHUB_REPOSITORY%%/*}"
+          if [ "$REPO_NAME" = "$OWNER_NAME.github.io" ]; then
+            BASE_PATH="/"
+          else
+            BASE_PATH="/$REPO_NAME/"
+          fi
+          sed -i "s|<base href=\"/\" />|<base href=\"$BASE_PATH\" />|" publish-output/wwwroot/index.html
+          cp publish-output/wwwroot/index.html publish-output/wwwroot/404.html
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish-output/wwwroot
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
