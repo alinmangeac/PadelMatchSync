@@ -84,7 +84,7 @@
                     <div class="availability-heading"><div><strong>Your availability</strong><small>@matchDate.ToString("dddd, MMMM d")</small></div><select aria-label="Availability for selected day" value="@singleDay.Status" @onchange="e => SetSingleStatus(e.Value?.ToString())"><option value="">Choose availability</option><option>Available</option><option>Maybe</option><option>Unavailable</option></select></div>
                     @if (singleDay.Status is "Available" or "Maybe")
                     {
-                        <div class="time-window"><span>Free between</span><input aria-label="Available from" type="time" step="1800" @bind="singleDay.From" /><span>and</span><input aria-label="Available until" type="time" step="1800" @bind="singleDay.Until" /></div>
+                        <div class="time-window"><span>Free between</span><select aria-label="Available from" @bind="singleDay.FromText">@foreach (var time in TimeOptions) { <option value="@time">@time</option> }</select><span>and</span><select aria-label="Available until" @bind="singleDay.UntilText">@foreach (var time in TimeOptions) { <option value="@time">@time</option> }</select></div>
                     }
                     @if (SingleWindowInvalid)
                     {
@@ -118,9 +118,9 @@
                                     <select aria-label="Availability for @day.Date.ToString("dddd, MMMM d")" value="@day.Status" @onchange="e => UpdateStatus(day, e.Value?.ToString())"><option value="">Choose</option><option>Available</option><option>Maybe</option><option>Unavailable</option></select>
                                     @if (day.Status is "Available" or "Maybe")
                                     {
-                                        <input aria-label="Available from on @day.Date.ToString("MMM d")" type="time" step="1800" @bind="day.From" />
+                                        <select aria-label="Available from on @day.Date.ToString("MMM d")" @bind="day.FromText">@foreach (var time in TimeOptions) { <option value="@time">@time</option> }</select>
                                         <span class="time-separator">to</span>
-                                        <input aria-label="Available until on @day.Date.ToString("MMM d")" type="time" step="1800" @bind="day.Until" />
+                                        <select aria-label="Available until on @day.Date.ToString("MMM d")" @bind="day.UntilText">@foreach (var time in TimeOptions) { <option value="@time">@time</option> }</select>
                                     }
                                 </div>
                             }
@@ -223,11 +223,15 @@
         public string Status { get; set; } = "";
         public TimeOnly From { get; set; } = new(17, 0);
         public TimeOnly Until { get; set; } = new(20, 0);
+        public string FromText { get => From.ToString("HH:mm", CultureInfo.InvariantCulture); set { if (TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)) From = time; } }
+        public string UntilText { get => Until.ToString("HH:mm", CultureInfo.InvariantCulture); set { if (TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)) Until = time; } }
     }
     private bool IsRangeValid => rangeEnd.Date >= rangeStart.Date && (rangeEnd.Date - rangeStart.Date).TotalDays < 31;
     private bool IsRangeAvailabilityComplete => rangeAvailability.Count > 0 && rangeAvailability.All(day => !string.IsNullOrEmpty(day.Status));
-    private bool RangeWindowInvalid => rangeAvailability.Any(day => (day.Status is "Available" or "Maybe") && day.From >= day.Until);
-    private bool SingleWindowInvalid => (singleDay.Status is "Available" or "Maybe") && singleDay.From >= singleDay.Until;
+    private bool RangeWindowInvalid => rangeAvailability.Any(day => (day.Status is "Available" or "Maybe") && (day.From >= day.Until || !IsHalfHour(day.From) || !IsHalfHour(day.Until)));
+    private bool SingleWindowInvalid => (singleDay.Status is "Available" or "Maybe") && (singleDay.From >= singleDay.Until || !IsHalfHour(singleDay.From) || !IsHalfHour(singleDay.Until));
+    private static bool IsHalfHour(TimeOnly time) => time.Ticks % (TimeSpan.TicksPerMinute * 30) == 0;
+    private static readonly string[] TimeOptions = Enumerable.Range(0, 48).Select(index => TimeOnly.MinValue.AddMinutes(index * 30).ToString("HH:mm", CultureInfo.InvariantCulture)).ToArray();
     private bool CanSaveAvailability => useDateRange ? IsRangeValid && IsRangeAvailabilityComplete && !RangeWindowInvalid : !string.IsNullOrEmpty(singleDay.Status) && !SingleWindowInvalid;
     private IReadOnlyList<DayItem> WeekDays => Enumerable.Range(5, 7).Select(d => new DayItem(new DateTime(2026, 10, d).ToString("ddd", CultureInfo.InvariantCulture), new DateTime(2026, 10, d), d == 10)).ToList();
     protected override async Task OnInitializedAsync()

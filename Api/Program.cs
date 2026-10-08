@@ -144,7 +144,10 @@ static string? ValidateAvailability(IReadOnlyList<AvailabilityInput>? days, bool
     {
         if (day.Status is not ("Available" or "Maybe" or "Unavailable")) return "Choose an availability for every date.";
         if (day.Status is "Available" or "Maybe")
+        {
             if (day.From is null || day.Until is null || day.From >= day.Until) return "Set a valid start and end time for each available day.";
+            if (day.From.Value.Ticks % (TimeSpan.TicksPerMinute * 30) != 0 || day.Until.Value.Ticks % (TimeSpan.TicksPerMinute * 30) != 0) return "Choose availability times on the hour or half-hour.";
+        }
     }
     return null;
 }
