@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: padel-match-sync-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    disk:
+      name: padel-match-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: Auth__SigningKey
+        generateValue: true
+      - key: ConnectionStrings__Matches
+        value: Data Source=/var/data/padel-match-sync.db
+      - key: Cors__AllowedOrigins
+        value: https://alinmangeac.github.io

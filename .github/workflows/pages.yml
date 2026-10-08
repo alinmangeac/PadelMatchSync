@@ -29,6 +29,21 @@ jobs:
           dotnet-version: 8.0.x
       - name: Publish Blazor WebAssembly app
         run: dotnet publish PadelMatchSync.csproj --configuration Release --output publish-output
+      - name: Configure the API address
+        env:
+          PADEL_MATCH_SYNC_API_URL: ${{ vars.PADEL_MATCH_SYNC_API_URL }}
+        run: |
+          python - <<'PY'
+          import json, os
+          path = 'publish-output/wwwroot/appsettings.json'
+          with open(path, encoding='utf-8') as file:
+              settings = json.load(file)
+          api_url = os.environ.get('PADEL_MATCH_SYNC_API_URL', '').strip()
+          if api_url:
+              settings.setdefault('PadelMatchSync', {})['ApiBaseUrl'] = api_url.rstrip('/') + '/'
+              with open(path, 'w', encoding='utf-8') as file:
+                  json.dump(settings, file, indent=2)
+          PY
       - name: Configure the GitHub Pages base path
         shell: bash
         run: |

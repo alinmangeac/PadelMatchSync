@@ -1,5 +1,7 @@
 @page "/"
 @using System.Globalization
+@inject PadelMatchSync.Services.ApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>Padel Match Sync — Plan your match day</PageTitle>
 
@@ -17,7 +19,7 @@
     </aside>
 
     <main class="main-content" id="today">
-        <header class="topbar"><a class="mobile-brand" href="./" aria-label="Padel Match Sync home"><img src="padel-match-sync-icon.svg" alt="" /><span>Padel Match Sync</span></a><div class="breadcrumb">Weekend crew <span>/</span> <strong>My day</strong></div><div class="top-actions"><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">A</div></div></header>
+        <header class="topbar"><a class="mobile-brand" href="./" aria-label="Padel Match Sync home"><img src="padel-match-sync-icon.svg" alt="" /><span>Padel Match Sync</span></a><div class="breadcrumb">Weekend crew <span>/</span> <strong>My day</strong></div><div class="top-actions"><button class="account-button" @onclick="ToggleAccount">@(Api.IsSignedIn ? Api.DisplayName : "Sign in")</button><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">@(Api.DisplayName?.FirstOrDefault() ?? 'A')</div></div></header>
         <div class="content-wrap">
             <div class="page-heading"><div><div class="eyebrow">SATURDAY, OCTOBER 10, 2026 <span class="sun">☀</span></div><h1>Make today <em>count.</em></h1><p class="subheading">Your match day, all in one place.</p></div><button class="primary-button" @onclick="OpenPlanner"><span>＋</span> Plan a match</button></div>
 
@@ -27,6 +29,14 @@
                 <div class="hero-bottom"><div class="attending"><div class="avatar-stack"><span class="player p1">A</span><span class="player p2">M</span><span class="player p3">J</span><span class="player p4">S</span></div><span><strong>4 players</strong> are in</span></div><button class="text-button" @onclick="ToggleDetails">@(showDetails ? "Hide details" : "Match details") <span>→</span></button></div>
                 @if (showDetails) { <div class="match-details"><div><small>TEAMS</small><strong>Alex &amp; Maya <span>vs</span> Jordan &amp; Sam</strong></div><div><small>NOTES</small><strong>Bring a new can of balls</strong></div></div> }
             </section>
+
+            @if (Api.IsSignedIn)
+            {
+                <section class="my-matches-panel"><div class="section-heading compact"><div><h2>Your planned matches</h2><p>Invite your crew with a private link.</p></div><span class="progress-count">@myMatches.Count</span></div>
+                    @if (myMatches.Count == 0) { <p class="empty-matches">No saved matches yet. Plan one and share it with your players.</p> }
+                    else { @foreach (var savedMatch in myMatches) { var shareUrl = Navigation.ToAbsoluteUri($"match/{savedMatch.ShareCode}").ToString(); <article class="saved-match"><div><strong>@savedMatch.Name</strong><small>@savedMatch.Venue · @savedMatch.Availability.Count @(savedMatch.Availability.Count == 1 ? "date" : "dates") · @savedMatch.ResponseCount responses</small></div><a href="@shareUrl">Open invite ↗</a></article> } }
+                </section>
+            }
 
             <div class="below-grid">
                 <section class="schedule-panel" id="schedule"><div class="section-heading"><div><h2>Today’s plan</h2><p>A little prep goes a long way.</p></div><button class="link-button" @onclick="OpenPlanner">View schedule <span>→</span></button></div>
@@ -56,7 +66,7 @@
             <div class="modal-kicker">GET YOUR CREW TOGETHER</div>
             <h2>Plan a match</h2>
             <p>Choose a day or a date range, then add your availability.</p>
-            <label>Match name<input @bind="matchName" placeholder="e.g. Saturday rally" /></label>
+                <label>Match name<input @bind="matchName" placeholder="e.g. Saturday rally" /></label>
 
             <div class="date-mode" role="group" aria-label="Date selection type">
                 <button class="date-mode-button @(!useDateRange ? "active" : "")" @onclick="() => SetDateMode(false)">One day</button>
@@ -124,16 +134,37 @@
             }
 
             <label>Where are you playing?<input @bind="venue" placeholder="Court or club name" /></label>
-            <button class="primary-button modal-submit" @onclick="SaveMatch" disabled="@(!CanSaveAvailability)">Save availability <span>→</span></button>
+            @if (!Api.IsSignedIn) { <div class="availability-prompt">Sign in to save this plan and get a shareable match link.</div> }
+            <button class="primary-button modal-submit" @onclick="SaveMatch" disabled="@(!CanSaveAvailability || !Api.IsSignedIn)">@(saving ? "Saving…" : "Create & share match") <span>→</span></button>
         </section>
     </div>
 }
-@if (!string.IsNullOrWhiteSpace(toastMessage)) { <div class="toast">✓ &nbsp;@toastMessage</div> }
+@if (showAccount)
+{
+    <div class="modal-backdrop" @onclick="ToggleAccount"><section class="planner-modal auth-modal" @onclick:stopPropagation="true" aria-label="Account">
+        <button class="modal-close" @onclick="ToggleAccount" aria-label="Close">×</button><div class="modal-kicker">YOUR MATCHES, YOUR CREW</div><h2>@(Api.IsSignedIn ? $"Hi, {Api.DisplayName}" : accountMode == "register" ? "Create your account" : "Welcome back")</h2>
+        @if (Api.IsSignedIn) { <p>Your matches are saved securely to your account.</p><button class="primary-button modal-submit" @onclick="SignOut">Sign out</button> }
+        else { @if (accountMode == "register") { <label>Your name<input @bind="accountName" autocomplete="name" placeholder="Your name" /></label> }<label>Email<input type="email" @bind="accountEmail" autocomplete="email" placeholder="you@example.com" /></label><label>Password<input type="password" @bind="accountPassword" autocomplete="@(accountMode == "register" ? "new-password" : "current-password")" placeholder="@(accountMode == "register" ? "At least 10 characters" : "Your password")" /></label>
+            @if (!string.IsNullOrWhiteSpace(accountError)) { <div class="range-message error">@accountError</div> }
+            <button class="primary-button modal-submit" @onclick="Authenticate" disabled="@accountBusy">@(accountBusy ? "Please wait…" : accountMode == "register" ? "Create account" : "Sign in") <span>→</span></button><button class="auth-switch" @onclick="SwitchAccountMode">@(accountMode == "register" ? "Already have an account? Sign in" : "New here? Create an account")</button> }
+    </section></div>
+}
+@if (!string.IsNullOrWhiteSpace(toastMessage)) { <div class="toast">✓ &nbsp;@toastMessage @if (!string.IsNullOrWhiteSpace(lastShareUrl)) { <a href="@lastShareUrl">Open share link →</a> }</div> }
 
 @code {
     private bool showDetails;
     private bool showPlanner;
     private bool useDateRange;
+    private bool showAccount;
+    private bool accountBusy;
+    private bool saving;
+    private string accountMode = "login";
+    private string accountName = "";
+    private string accountEmail = "";
+    private string accountPassword = "";
+    private string accountError = "";
+    private string lastShareUrl = "";
+    private List<PadelMatchSync.Services.MatchSummary> myMatches = [];
     private string matchName = "Saturday rally";
     private DateTime matchDate = new(2026, 10, 10);
     private DateTime rangeStart = new(2026, 10, 10);
@@ -158,7 +189,19 @@
     private bool SingleWindowInvalid => (singleDay.Status is "Available" or "Maybe") && singleDay.From >= singleDay.Until;
     private bool CanSaveAvailability => useDateRange ? IsRangeValid && IsRangeAvailabilityComplete && !RangeWindowInvalid : !string.IsNullOrEmpty(singleDay.Status) && !SingleWindowInvalid;
     private IReadOnlyList<DayItem> WeekDays => Enumerable.Range(5, 7).Select(d => new DayItem(new DateTime(2026, 10, d).ToString("ddd", CultureInfo.InvariantCulture), new DateTime(2026, 10, d), d == 10)).ToList();
-    private void OpenPlanner() { showPlanner = true; toastMessage = null; RefreshRangeDays(); }
+    protected override async Task OnInitializedAsync() { await Api.RestoreAsync(); if (Api.IsSignedIn) await RefreshMatches(); }
+    private async Task RefreshMatches() { var result = await Api.GetMatchesAsync(); if (result.Ok) myMatches = result.Matches.ToList(); }
+    private void ToggleAccount() { showAccount = !showAccount; accountError = ""; }
+    private void SwitchAccountMode() { accountMode = accountMode == "register" ? "login" : "register"; accountError = ""; }
+    private async Task Authenticate()
+    {
+        accountBusy = true; accountError = "";
+        try { var result = accountMode == "register" ? await Api.RegisterAsync(accountName, accountEmail, accountPassword) : await Api.LoginAsync(accountEmail, accountPassword); if (!result.Ok) { accountError = result.Message; return; } showAccount = false; accountPassword = ""; await RefreshMatches(); }
+        catch (Exception ex) { accountError = $"Could not reach the Padel Match Sync API. Check that it is deployed and configured. ({ex.Message})"; }
+        finally { accountBusy = false; }
+    }
+    private async Task SignOut() { await Api.SignOutAsync(); myMatches.Clear(); showAccount = false; }
+    private void OpenPlanner() { showPlanner = true; toastMessage = null; lastShareUrl = ""; RefreshRangeDays(); }
     private void ClosePlanner() => showPlanner = false;
     private void ToggleDetails() => showDetails = !showDetails;
     private void SelectDay(DateTime day) => SelectedDay = day;
@@ -175,15 +218,15 @@
             .ToList();
     }
     private static void UpdateStatus(DayAvailability day, string? status) => day.Status = status ?? "";
-    private void SaveMatch()
+    private async Task SaveMatch()
     {
-        var availableDays = useDateRange ? rangeAvailability.Where(day => day.Status is "Available" or "Maybe").ToList() : new List<DayAvailability> { singleDay };
-        var dateSummary = useDateRange
-            ? $"{availableDays.Count} available day(s) from {rangeStart:MMM d}–{rangeEnd:MMM d}"
-            : $"{matchDate:ddd, MMM d}: {singleDay.Status.ToLowerInvariant()}";
-        showPlanner = false;
-        toastMessage = $"{matchName} availability ready — {dateSummary}.";
-        _ = ClearToast();
+        if (saving || !CanSaveAvailability || !Api.IsSignedIn) return;
+        saving = true;
+        IEnumerable<DayAvailability> selectedDays = useDateRange ? rangeAvailability : new[] { new DayAvailability { Date = matchDate, Status = singleDay.Status, From = singleDay.From, Until = singleDay.Until } };
+        var days = selectedDays.Select(day => new PadelMatchSync.Services.AvailabilityInput(DateOnly.FromDateTime(day.Date), day.Status, day.Status is "Available" or "Maybe" ? day.From : null, day.Status is "Available" or "Maybe" ? day.Until : null)).ToList();
+        try { var result = await Api.CreateMatchAsync(new PadelMatchSync.Services.CreateMatchRequest(matchName, venue, days)); if (!result.Ok || result.Match is null) { toastMessage = result.Message; return; } showPlanner = false; lastShareUrl = Navigation.ToAbsoluteUri($"match/{result.Match.ShareCode}").ToString(); toastMessage = $"{matchName} saved with a private share link."; await RefreshMatches(); _ = ClearToast(); }
+        catch (Exception ex) { toastMessage = $"Could not reach the Padel Match Sync API. ({ex.Message})"; }
+        finally { saving = false; }
     }
     private async Task ClearToast() { await Task.Delay(3500); toastMessage = null; await InvokeAsync(StateHasChanged); }
 }

@@ -11,4 +11,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.12" PrivateAssets="all" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Api/**/*.cs" />
+    <Content Remove="Api/**" />
+    <None Remove="Api/**" />
+  </ItemGroup>
+
 </Project>
