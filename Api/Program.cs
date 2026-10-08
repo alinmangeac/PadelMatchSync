@@ -5,9 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
-var renderPort = Environment.GetEnvironmentVariable("PORT");
-if (int.TryParse(renderPort, out var port))
-    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "http://localhost:5209;https://localhost:7230;https://alinmangeac.github.io")
     .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 var signingKey = builder.Configuration["Auth:SigningKey"];
