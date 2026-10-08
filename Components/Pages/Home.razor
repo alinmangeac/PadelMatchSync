@@ -146,17 +146,41 @@
 @if (showAccount)
 {
     <div class="modal-backdrop" @onclick="ToggleAccount"><section class="planner-modal auth-modal" @onclick:stopPropagation="true" aria-label="Account">
-        <button class="modal-close" @onclick="ToggleAccount" aria-label="Close">×</button><div class="modal-kicker">YOUR MATCHES, YOUR CREW</div><h2>@(Api.IsSignedIn ? $"Hi, {Api.DisplayName}" : accountMode == "register" ? "Create your account" : "Welcome back")</h2>
-        @if (Api.IsSignedIn) { <p>Your profile and match preferences are saved to your account.</p>
+        <button class="modal-close" @onclick="ToggleAccount" aria-label="Close">×</button><div class="modal-kicker">YOUR MATCHES, YOUR CREW</div><h2>@(accountMode == "reset" ? "Reset your password" : Api.IsSignedIn ? $"Hi, {Api.DisplayName}" : accountMode == "register" ? "Create your account" : "Welcome back")</h2>
+        @if (Api.IsSignedIn && accountMode != "reset") { <p>Your profile and match preferences are saved to your account.</p>
             <label>Your name<input @bind="profileName" autocomplete="name" maxlength="80" /></label>
             <label>City<select value="@selectedCity" @onchange="CityChanged"><option value="">Choose your city</option>@foreach (var city in AvailableCities) { <option value="@city.Name">@city.Name</option> }</select></label>
             @if (!string.IsNullOrWhiteSpace(profileMessage)) { <div class="@(profileSaved ? "profile-success" : "range-message error")">@profileMessage</div> }
             <button class="primary-button modal-submit" @onclick="SaveProfile" disabled="@profileBusy">@(profileBusy ? "Saving…" : "Save settings") <span>→</span></button>
             <button class="auth-switch" @onclick="SignOut">Sign out</button>
         }
-        else { @if (accountMode == "register") { <label>Your name<input @bind="accountName" autocomplete="name" placeholder="Your name" /></label> }<label>Email<input type="email" @bind="accountEmail" autocomplete="email" placeholder="you@example.com" /></label><label>Password<input type="password" @bind="accountPassword" autocomplete="@(accountMode == "register" ? "new-password" : "current-password")" placeholder="@(accountMode == "register" ? "At least 10 characters" : "Your password")" /></label>
+else if (accountMode == "forgot")
+        {
+            <p>Enter your account email and we’ll send a password reset link if an account exists.</p>
+            <label>Email<input type="email" @bind="accountEmail" autocomplete="email" placeholder="you@example.com" /></label>
             @if (!string.IsNullOrWhiteSpace(accountError)) { <div class="range-message error">@accountError</div> }
-            <button class="primary-button modal-submit" @onclick="Authenticate" disabled="@accountBusy">@(accountBusy ? "Please wait…" : accountMode == "register" ? "Create account" : "Sign in") <span>→</span></button><button class="auth-switch" @onclick="SwitchAccountMode">@(accountMode == "register" ? "Already have an account? Sign in" : "New here? Create an account")</button> }
+            @if (!string.IsNullOrWhiteSpace(resetMessage)) { <div class="profile-success">@resetMessage</div> }
+            <button class="primary-button modal-submit" @onclick="RequestPasswordReset" disabled="@accountBusy">@(accountBusy ? "Sending…" : "Send reset link")</button>
+            <button class="auth-switch" @onclick="BackToSignIn">Back to sign in</button>
+        }
+        else if (accountMode == "reset")
+        {
+            <p>Choose a new password for your account.</p>
+            <label>New password<input type="password" @bind="resetPassword" autocomplete="new-password" placeholder="At least 6 characters" /></label>
+            @if (!string.IsNullOrWhiteSpace(accountError)) { <div class="range-message error">@accountError</div> }
+            <button class="primary-button modal-submit" @onclick="CompletePasswordReset" disabled="@accountBusy">@(accountBusy ? "Updating…" : "Update password")</button>
+        }
+        else
+        {
+            @if (accountMode == "register") { <label>Your name<input @bind="accountName" autocomplete="name" placeholder="Your name" /></label> }
+            <label>Email<input type="email" @bind="accountEmail" autocomplete="email" placeholder="you@example.com" /></label>
+            <label>Password<input type="password" @bind="accountPassword" autocomplete="@(accountMode == "register" ? "new-password" : "current-password")" placeholder="@(accountMode == "register" ? "At least 6 characters" : "Your password")" /></label>
+            @if (!string.IsNullOrWhiteSpace(accountError)) { <div class="range-message error">@accountError</div> }
+            @if (!string.IsNullOrWhiteSpace(resetMessage)) { <div class="profile-success">@resetMessage</div> }
+            <button class="primary-button modal-submit" @onclick="Authenticate" disabled="@accountBusy">@(accountBusy ? "Please wait…" : accountMode == "register" ? "Create account" : "Sign in") <span>→</span></button>
+            @if (accountMode == "login") { <button class="auth-switch" @onclick="ShowForgotPassword">Forgot your password?</button> }
+            <button class="auth-switch" @onclick="SwitchAccountMode">@(accountMode == "register" ? "Already have an account? Sign in" : "New here? Create an account")</button>
+        }
     </section></div>
 }
 @if (!string.IsNullOrWhiteSpace(toastMessage)) { <div class="toast">✓ &nbsp;@toastMessage @if (!string.IsNullOrWhiteSpace(lastShareUrl)) { <a href="@lastShareUrl">Open share link →</a> }</div> }
@@ -174,6 +198,9 @@
     private string accountName = "";
     private string accountEmail = "";
     private string accountPassword = "";
+    private string resetToken = "";
+    private string resetPassword = "";
+    private string resetMessage = "";
     private string accountError = "";
     private string profileName = "";
     private string selectedCity = "Bucharest";
@@ -236,6 +263,8 @@
     private IReadOnlyList<DayItem> WeekDays => Enumerable.Range(5, 7).Select(d => new DayItem(new DateTime(2026, 10, d).ToString("ddd", CultureInfo.InvariantCulture), new DateTime(2026, 10, d), d == 10)).ToList();
     protected override async Task OnInitializedAsync()
     {
+        resetToken = ReadQueryValue(Navigation.ToAbsoluteUri(Navigation.Uri).Query, "resetToken") ?? "";
+        if (resetToken.Length > 0) { accountMode = "reset"; showAccount = true; }
         await Api.RestoreAsync();
         selectedCity = Api.City;
         if (Api.IsSignedIn)
@@ -249,7 +278,34 @@
     }
     private async Task RefreshMatches() { var result = await Api.GetMatchesAsync(); if (result.Ok) myMatches = result.Matches.ToList(); }
     private void ToggleAccount() { showAccount = !showAccount; accountError = ""; profileMessage = ""; if (Api.IsSignedIn) { profileName = Api.DisplayName ?? ""; selectedCity = Api.City; } }
-    private void SwitchAccountMode() { accountMode = accountMode == "register" ? "login" : "register"; accountError = ""; }
+    private void ShowForgotPassword() { accountMode = "forgot"; accountError = ""; resetMessage = ""; }
+    private void BackToSignIn() { accountMode = "login"; accountError = ""; resetMessage = ""; }
+    private void SwitchAccountMode() { accountMode = accountMode == "register" ? "login" : "register"; accountError = ""; resetMessage = ""; }
+private async Task RequestPasswordReset()
+    {
+        if (accountBusy) return;
+        accountBusy = true; accountError = ""; resetMessage = "";
+        try { var result = await Api.RequestPasswordResetAsync(accountEmail); if (result.Ok) resetMessage = result.Message; else accountError = result.Message; }
+        catch { accountError = "Could not request a reset link. Please try again later."; }
+        finally { accountBusy = false; }
+    }
+    private async Task CompletePasswordReset()
+    {
+        if (accountBusy) return;
+        accountBusy = true; accountError = "";
+        try { var result = await Api.ResetPasswordAsync(resetToken, resetPassword); if (!result.Ok) { accountError = result.Message; return; } accountMode = "login"; accountPassword = ""; resetPassword = ""; resetToken = ""; accountError = ""; resetMessage = result.Message; }
+        catch { accountError = "Could not reset the password. Please try again later."; }
+        finally { accountBusy = false; }
+    }
+    private static string? ReadQueryValue(string query, string key)
+    {
+        foreach (var item in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var pair = item.Split('=', 2);
+            if (Uri.UnescapeDataString(pair[0]) == key) return Uri.UnescapeDataString(pair.Length > 1 ? pair[1].Replace('+', ' ') : "");
+        }
+        return null;
+    }
     private async Task Authenticate()
     {
         accountBusy = true; accountError = "";

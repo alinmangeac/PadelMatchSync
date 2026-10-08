@@ -27,6 +27,20 @@ public sealed class ApiClient(HttpClient http, IJSRuntime js)
     }
     public async Task<AuthResult> RegisterAsync(string name, string email, string password) => await AuthenticateAsync("api/auth/register", new { name, email, password });
     public async Task<AuthResult> LoginAsync(string email, string password) => await AuthenticateAsync("api/auth/login", new { email, password });
+public async Task<(bool Ok, string Message)> RequestPasswordResetAsync(string email)
+    {
+        using var client = new HttpClient { BaseAddress = new Uri(ApiBase + "/") };
+        using var response = await client.PostAsJsonAsync("api/auth/forgot-password", new { email });
+        if (!response.IsSuccessStatusCode) return (false, await ReadError(response));
+        return (true, (await response.Content.ReadFromJsonAsync<ApiMessage>())?.Message ?? "If an account exists for that email, a reset link will be sent.");
+    }
+    public async Task<(bool Ok, string Message)> ResetPasswordAsync(string token, string password)
+    {
+        using var client = new HttpClient { BaseAddress = new Uri(ApiBase + "/") };
+        using var response = await client.PostAsJsonAsync("api/auth/reset-password", new { token, password });
+        if (!response.IsSuccessStatusCode) return (false, await ReadError(response));
+        return (true, (await response.Content.ReadFromJsonAsync<ApiMessage>())?.Message ?? "Your password has been updated.");
+    }
     private async Task<AuthResult> AuthenticateAsync(string path, object request)
     {
         using var client = new HttpClient { BaseAddress = new Uri(ApiBase + "/") };
@@ -104,6 +118,7 @@ public sealed record AuthResult(bool Ok, string Message);
 public sealed record AuthResponse(string Token, string Name, string Email, string? City = null);
 public sealed record AccountProfile(string Name, string Email, string City);
 public sealed record ApiError(string Error);
+public sealed record ApiMessage(string Message);
 public sealed record AvailabilityInput(DateOnly Date, string Status, TimeOnly? From, TimeOnly? Until);
 public sealed record CreateMatchRequest(string Name, string? Venue, IReadOnlyList<AvailabilityInput> Availability);
 public sealed record CreatedMatch(string Id, string Name, string ShareCode, DateTime CreatedAt);
