@@ -1,11 +1,11 @@
 @page "/"
 @using System.Globalization
 
-<PageTitle>Rally — Plan your match day</PageTitle>
+<PageTitle>Padel Match Sync — Plan your match day</PageTitle>
 
 <div class="dashboard">
     <aside class="sidebar">
-        <a class="brand" href="/" aria-label="Rally home"><span class="brand-mark">r.</span><span>rally<span class="brand-dot">.</span></span></a>
+        <a class="brand" href="/" aria-label="Padel Match Sync home"><img class="brand-mark" src="padel-match-sync-icon.svg" alt="" /><span class="brand-name">Padel Match Sync</span></a>
         <div class="team-switch"><div class="team-avatar">🎾</div><div><strong>Weekend crew</strong><small>4 players</small></div><span class="chevron">⌄</span></div>
         <div class="nav-label">WORKSPACE</div>
         <nav class="side-nav" aria-label="Main navigation">
@@ -17,7 +17,7 @@
     </aside>
 
     <main class="main-content" id="today">
-        <header class="topbar"><button class="mobile-brand" aria-label="Rally home">r<span>.</span></button><div class="breadcrumb">Weekend crew <span>/</span> <strong>My day</strong></div><div class="top-actions"><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">A</div></div></header>
+        <header class="topbar"><a class="mobile-brand" href="/" aria-label="Padel Match Sync home"><img src="padel-match-sync-icon.svg" alt="" /><span>Padel Match Sync</span></a><div class="breadcrumb">Weekend crew <span>/</span> <strong>My day</strong></div><div class="top-actions"><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">A</div></div></header>
         <div class="content-wrap">
             <div class="page-heading"><div><div class="eyebrow">SATURDAY, OCTOBER 10, 2026 <span class="sun">☀</span></div><h1>Make today <em>count.</em></h1><p class="subheading">Your match day, all in one place.</p></div><button class="primary-button" @onclick="OpenPlanner"><span>＋</span> Plan a match</button></div>
 
@@ -41,7 +41,7 @@
                     <section class="checklist-panel"><div class="section-heading compact"><div><h2>Match checklist</h2><p>Get ready to play</p></div><span class="progress-count">@checkedItems.Count/4</span></div><div class="check-items"><label class="check-item"><input type="checkbox" checked="@checkedItems.Contains(0)" @onchange="() => ToggleCheck(0)" /><span class="checkmark"></span><span>Confirm the court booking</span></label><label class="check-item"><input type="checkbox" checked="@checkedItems.Contains(1)" @onchange="() => ToggleCheck(1)" /><span class="checkmark"></span><span>Check who’s playing</span></label><label class="check-item"><input type="checkbox" checked="@checkedItems.Contains(2)" @onchange="() => ToggleCheck(2)" /><span class="checkmark"></span><span>Pack your racket &amp; gear</span></label><label class="check-item"><input type="checkbox" checked="@checkedItems.Contains(3)" @onchange="() => ToggleCheck(3)" /><span class="checkmark"></span><span>Bring water &amp; balls</span></label></div><button class="checklist-link" @onclick="OpenPlanner">Edit checklist <span>→</span></button></section>
                 </aside>
             </div>
-            <footer class="footer-note"><span>Made for the love of the game <span class="heart">♥</span></span><span>RALLY · YOUR PADEL PLANNER</span></footer>
+            <footer class="footer-note"><span>Made for the love of the game <span class="heart">♥</span></span><span>PADEL MATCH SYNC</span></footer>
         </div>
     </main>
 </div>

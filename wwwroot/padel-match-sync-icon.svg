@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Padel Match Sync</title>
+  <rect width="96" height="96" rx="25" fill="#285e44"/>
+  <path d="M27 34a26 26 0 0 1 41-6" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="4.5"/>
+  <path d="m61 20 9 8-12 2" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.5"/>
+  <path d="M69 62a26 26 0 0 1-41 6" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="4.5"/>
+  <path d="m35 76-9-8 12-2" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.5"/>
+  <circle cx="48" cy="48" r="17.5" fill="#e7ef68"/>
+  <g fill="#779447">
+    <circle cx="42" cy="40" r="2.1"/><circle cx="52" cy="39" r="2.1"/>
+    <circle cx="38" cy="48" r="2.1"/><circle cx="48" cy="47" r="2.1"/><circle cx="58" cy="47" r="2.1"/>
+    <circle cx="43" cy="56" r="2.1"/><circle cx="53" cy="56" r="2.1"/>
+  </g>
+</svg>
