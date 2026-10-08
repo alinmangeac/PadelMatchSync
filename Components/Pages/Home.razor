@@ -50,27 +50,120 @@
 
 @if (showPlanner)
 {
-    <div class="modal-backdrop" @onclick="ClosePlanner"><section class="planner-modal" @onclick:stopPropagation="true" aria-label="Plan a match"><button class="modal-close" @onclick="ClosePlanner" aria-label="Close">×</button><div class="modal-kicker">MAKE IT HAPPEN</div><h2>Plan a match</h2><p>Get your crew together for a game.</p><label>Match name<input @bind="matchName" placeholder="e.g. Saturday rally" /></label><div class="form-row"><label>Date<input type="date" @bind="matchDate" /></label><label>Start time<input type="time" @bind="matchTime" /></label></div><label>Where are you playing?<input @bind="venue" placeholder="Court or club name" /></label><button class="primary-button modal-submit" @onclick="SaveMatch">Save match <span>→</span></button></section></div>
+    <div class="modal-backdrop" @onclick="ClosePlanner">
+        <section class="planner-modal" @onclick:stopPropagation="true" aria-label="Plan a match">
+            <button class="modal-close" @onclick="ClosePlanner" aria-label="Close">×</button>
+            <div class="modal-kicker">GET YOUR CREW TOGETHER</div>
+            <h2>Plan a match</h2>
+            <p>Choose a day or a date range, then add your availability.</p>
+            <label>Match name<input @bind="matchName" placeholder="e.g. Saturday rally" /></label>
+
+            <div class="date-mode" role="group" aria-label="Date selection type">
+                <button class="date-mode-button @(!useDateRange ? "active" : "")" @onclick="() => SetDateMode(false)">One day</button>
+                <button class="date-mode-button @(useDateRange ? "active" : "")" @onclick="() => SetDateMode(true)">Date range</button>
+            </div>
+
+            @if (!useDateRange)
+            {
+                <label>Match day<input type="date" @bind="matchDate" /></label>
+                <div class="availability-editor">
+                    <div class="availability-heading"><div><strong>Your availability</strong><small>@matchDate.ToString("dddd, MMMM d")</small></div><select aria-label="Availability for selected day" value="@singleDay.Status" @onchange="e => SetSingleStatus(e.Value?.ToString())"><option>Available</option><option>Maybe</option><option>Unavailable</option></select></div>
+                    @if (singleDay.Status != "Unavailable")
+                    {
+                        <div class="time-window"><span>Free between</span><input aria-label="Available from" type="time" @bind="singleDay.From" /><span>and</span><input aria-label="Available until" type="time" @bind="singleDay.Until" /></div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="form-row range-fields">
+                    <label>From<input type="date" @bind="rangeStart" @bind:after="RefreshRangeDays" /></label>
+                    <label>Through<input type="date" @bind="rangeEnd" @bind:after="RefreshRangeDays" /></label>
+                </div>
+                @if (!IsRangeValid)
+                {
+                    <div class="range-message error">Choose an end date after the start date, within a 31-day window.</div>
+                }
+                else
+                {
+                    <div class="availability-editor range-editor">
+                        <div class="availability-heading range-heading"><div><strong>Set availability for each day</strong><small>@rangeAvailability.Count @(rangeAvailability.Count == 1 ? "day" : "days") in this date range</small></div><span class="status-legend">Available · Maybe · Unavailable</span></div>
+                        <div class="availability-list">
+                            @foreach (var day in rangeAvailability)
+                            {
+                                <div class="availability-row">
+                                    <div class="availability-day"><strong>@day.Date.ToString("ddd")</strong><small>@day.Date.ToString("MMM d")</small></div>
+                                    <select aria-label="Availability for @day.Date.ToString("dddd, MMMM d")" value="@day.Status" @onchange="e => UpdateStatus(day, e.Value?.ToString())"><option>Available</option><option>Maybe</option><option>Unavailable</option></select>
+                                    @if (day.Status != "Unavailable")
+                                    {
+                                        <input aria-label="Available from on @day.Date.ToString("MMM d")" type="time" @bind="day.From" />
+                                        <span class="time-separator">to</span>
+                                        <input aria-label="Available until on @day.Date.ToString("MMM d")" type="time" @bind="day.Until" />
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+
+            <label>Where are you playing?<input @bind="venue" placeholder="Court or club name" /></label>
+            <button class="primary-button modal-submit" @onclick="SaveMatch" disabled="@(useDateRange && !IsRangeValid)">Save availability <span>→</span></button>
+        </section>
+    </div>
 }
 @if (!string.IsNullOrWhiteSpace(toastMessage)) { <div class="toast">✓ &nbsp;@toastMessage</div> }
 
 @code {
     private bool showDetails;
     private bool showPlanner;
+    private bool useDateRange;
     private string matchName = "Saturday rally";
     private DateTime matchDate = new(2026, 10, 10);
-    private TimeOnly matchTime = new(10, 30);
+    private DateTime rangeStart = new(2026, 10, 10);
+    private DateTime rangeEnd = new(2026, 10, 12);
+    private DayAvailability singleDay = new() { Status = "Available", From = new(10, 0), Until = new(20, 0) };
+    private List<DayAvailability> rangeAvailability = new();
     private string venue = "Padel House";
     private string? toastMessage;
     private DateTime SelectedDay = new(2026, 10, 10);
     private readonly HashSet<int> checkedItems = new() { 0, 1 };
     private record DayItem(string Label, DateTime Date, bool HasMatch);
+    private class DayAvailability
+    {
+        public DateTime Date { get; set; }
+        public string Status { get; set; } = "Available";
+        public TimeOnly From { get; set; } = new(17, 0);
+        public TimeOnly Until { get; set; } = new(20, 0);
+    }
+    private bool IsRangeValid => rangeEnd.Date >= rangeStart.Date && (rangeEnd.Date - rangeStart.Date).TotalDays < 31;
     private IReadOnlyList<DayItem> WeekDays => Enumerable.Range(5, 7).Select(d => new DayItem(new DateTime(2026, 10, d).ToString("ddd", CultureInfo.InvariantCulture), new DateTime(2026, 10, d), d == 10)).ToList();
-    private void OpenPlanner() { showPlanner = true; toastMessage = null; }
+    private void OpenPlanner() { showPlanner = true; toastMessage = null; RefreshRangeDays(); }
     private void ClosePlanner() => showPlanner = false;
     private void ToggleDetails() => showDetails = !showDetails;
     private void SelectDay(DateTime day) => SelectedDay = day;
     private void ToggleCheck(int item) { if (!checkedItems.Add(item)) checkedItems.Remove(item); }
-    private void SaveMatch() { showPlanner = false; toastMessage = $"{matchName} saved — {matchDate:MMM d} at {matchTime:h:mm tt}."; _ = ClearToast(); }
+    private void SetDateMode(bool range) => useDateRange = range;
+    private void SetSingleStatus(string? status) => singleDay.Status = status ?? "Unavailable";
+    private void RefreshRangeDays()
+    {
+        if (!IsRangeValid) return;
+        var existing = rangeAvailability.ToDictionary(day => day.Date.Date);
+        rangeAvailability = Enumerable.Range(0, (rangeEnd.Date - rangeStart.Date).Days + 1)
+            .Select(offset => rangeStart.Date.AddDays(offset))
+            .Select(date => existing.TryGetValue(date, out var day) ? day : new DayAvailability { Date = date })
+            .ToList();
+    }
+    private static void UpdateStatus(DayAvailability day, string? status) => day.Status = status ?? "Unavailable";
+    private void SaveMatch()
+    {
+        var availableDays = useDateRange ? rangeAvailability.Where(day => day.Status != "Unavailable").ToList() : new List<DayAvailability> { singleDay };
+        var dateSummary = useDateRange
+            ? $"{availableDays.Count} available day(s) from {rangeStart:MMM d}–{rangeEnd:MMM d}"
+            : $"{matchDate:ddd, MMM d}: {singleDay.Status.ToLowerInvariant()}";
+        showPlanner = false;
+        toastMessage = $"{matchName} availability ready — {dateSummary}.";
+        _ = ClearToast();
+    }
     private async Task ClearToast() { await Task.Delay(3500); toastMessage = null; await InvokeAsync(StateHasChanged); }
 }
