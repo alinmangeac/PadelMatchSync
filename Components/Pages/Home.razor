@@ -84,7 +84,7 @@
                     <div class="availability-heading"><div><strong>Your availability</strong><small>@matchDate.ToString("dddd, MMMM d")</small></div><select aria-label="Availability for selected day" value="@singleDay.Status" @onchange="e => SetSingleStatus(e.Value?.ToString())"><option value="">Choose availability</option><option>Available</option><option>Maybe</option><option>Unavailable</option></select></div>
                     @if (singleDay.Status is "Available" or "Maybe")
                     {
-                        <div class="time-window"><span>Free between</span><input aria-label="Available from" type="time" @bind="singleDay.From" /><span>and</span><input aria-label="Available until" type="time" @bind="singleDay.Until" /></div>
+                        <div class="time-window"><span>Free between</span><input aria-label="Available from" type="time" step="1800" @bind="singleDay.From" /><span>and</span><input aria-label="Available until" type="time" step="1800" @bind="singleDay.Until" /></div>
                     }
                     @if (SingleWindowInvalid)
                     {
@@ -118,9 +118,9 @@
                                     <select aria-label="Availability for @day.Date.ToString("dddd, MMMM d")" value="@day.Status" @onchange="e => UpdateStatus(day, e.Value?.ToString())"><option value="">Choose</option><option>Available</option><option>Maybe</option><option>Unavailable</option></select>
                                     @if (day.Status is "Available" or "Maybe")
                                     {
-                                        <input aria-label="Available from on @day.Date.ToString("MMM d")" type="time" @bind="day.From" />
+                                        <input aria-label="Available from on @day.Date.ToString("MMM d")" type="time" step="1800" @bind="day.From" />
                                         <span class="time-separator">to</span>
-                                        <input aria-label="Available until on @day.Date.ToString("MMM d")" type="time" @bind="day.Until" />
+                                        <input aria-label="Available until on @day.Date.ToString("MMM d")" type="time" step="1800" @bind="day.Until" />
                                     }
                                 </div>
                             }
