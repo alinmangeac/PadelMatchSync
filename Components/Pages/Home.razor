@@ -137,9 +137,9 @@
                 }
             }
 
-            <label>Where are you playing?<input @bind="venue" placeholder="Court or club name" /></label>
+            <div class="venue-field"><strong>Where are you playing?</strong><details class="venue-picker"><summary>@(selectedVenues.Count == 0 ? "Choose locations" : $"{selectedVenues.Count} location{(selectedVenues.Count == 1 ? "" : "s")} selected")</summary><div class="venue-menu"><input aria-label="Search padel locations" @bind="venueSearch" placeholder="Search Sibiu clubs…" />@foreach (var option in VenueOptions.Where(item => item.Contains(venueSearch, StringComparison.OrdinalIgnoreCase))) { <label class="venue-option"><input type="checkbox" checked="@selectedVenues.Contains(option)" @onchange="() => ToggleVenue(option)" /><span>@option</span></label> }<div class="custom-venue"><input aria-label="Add another location" @bind="customVenue" @bind:event="oninput" placeholder="Another location…" /><button type="button" @onclick="AddCustomVenue" disabled="@string.IsNullOrWhiteSpace(customVenue)">Add</button></div></div></details>@if (selectedVenues.Count > 0) { <div class="selected-venues">@foreach (var selectedVenue in selectedVenues) { <span>@selectedVenue <button type="button" aria-label="Remove @selectedVenue" @onclick="() => ToggleVenue(selectedVenue)">×</button></span> }</div> }</div>
             @if (!Api.IsSignedIn) { <div class="availability-prompt">Sign in to save this plan and get a shareable match link.</div> }
-            <button class="primary-button modal-submit" @onclick="SaveMatch" disabled="@(!CanSaveAvailability || !Api.IsSignedIn)">@(saving ? "Saving…" : "Create & share match") <span>→</span></button>
+            <button class="primary-button modal-submit" @onclick="SaveMatch" disabled="@(!CanSaveAvailability || !Api.IsSignedIn || selectedVenues.Count == 0)">@(saving ? "Saving…" : "Create & share match") <span>→</span></button>
         </section>
     </div>
 }
@@ -193,7 +193,10 @@
     private DateTime rangeEnd = new(2026, 10, 12);
     private DayAvailability singleDay = new() { From = new(10, 0), Until = new(20, 0) };
     private List<DayAvailability> rangeAvailability = new();
-    private string venue = "Padel House";
+    private string venueSearch = "";
+    private string customVenue = "";
+    private List<string> selectedVenues = ["IN7 Club Sibiu"];
+    private static readonly string[] VenueOptions = ["IN7 Club Sibiu", "El Padre Padel (Șura Mare)", "VOLIA Padel Sibiu", "Clubul Voința Sibiu", "Padel Sibiu (Șelimbăr)", "Padel Paradise Sibiu (Șelimbăr)", "Padel Play Sibiu", "Fântânița Haiducului (Bradu)"];
     private string? toastMessage;
     private DateTime SelectedDay = new(2026, 10, 10);
     private string CurrentDisplayName => string.IsNullOrWhiteSpace(Api.DisplayName) ? "Alin" : Api.DisplayName;
@@ -310,6 +313,8 @@
     private void ToggleCheck(int item) { if (!checkedItems.Add(item)) checkedItems.Remove(item); }
     private void SetDateMode(bool range) => useDateRange = range;
     private void SetSingleStatus(string? status) => singleDay.Status = status ?? "";
+    private void ToggleVenue(string name) { if (!selectedVenues.Remove(name)) selectedVenues.Add(name); }
+    private void AddCustomVenue() { var name = customVenue.Trim(); if (name.Length == 0) return; if (!selectedVenues.Contains(name, StringComparer.OrdinalIgnoreCase)) selectedVenues.Add(name); customVenue = ""; }
     private void RefreshRangeDays()
     {
         if (!IsRangeValid) return;
@@ -326,7 +331,7 @@
         saving = true;
         IEnumerable<DayAvailability> selectedDays = useDateRange ? rangeAvailability : new[] { new DayAvailability { Date = matchDate, Status = singleDay.Status, From = singleDay.From, Until = singleDay.Until } };
         var days = selectedDays.Select(day => new PadelMatchSync.Services.AvailabilityInput(DateOnly.FromDateTime(day.Date), day.Status, day.Status is "Available" or "Maybe" ? day.From : null, day.Status is "Available" or "Maybe" ? day.Until : null)).ToList();
-        try { var result = await Api.CreateMatchAsync(new PadelMatchSync.Services.CreateMatchRequest(matchName, venue, days)); if (!result.Ok || result.Match is null) { toastMessage = result.Message; return; } showPlanner = false; lastShareUrl = Navigation.ToAbsoluteUri($"match/{result.Match.ShareCode}").ToString(); toastMessage = $"{matchName} saved with a private share link."; await RefreshMatches(); _ = ClearToast(); }
+        try { var result = await Api.CreateMatchAsync(new PadelMatchSync.Services.CreateMatchRequest(matchName, string.Join(", ", selectedVenues), days)); if (!result.Ok || result.Match is null) { toastMessage = result.Message; return; } showPlanner = false; lastShareUrl = Navigation.ToAbsoluteUri($"match/{result.Match.ShareCode}").ToString(); toastMessage = $"{matchName} saved with a private share link."; await RefreshMatches(); _ = ClearToast(); }
         catch (Exception ex) { toastMessage = $"Could not reach the Padel Match Sync API. ({ex.Message})"; }
         finally { saving = false; }
     }

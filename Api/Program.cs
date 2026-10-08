@@ -93,7 +93,7 @@ app.MapPost("/api/matches", async (CreateMatchRequest request, HttpRequest http,
 {
     var user = await Tokens.UserAsync(http, db, config); if (user is null) return Results.Unauthorized();
     var error = ValidateMatch(request); if (error is not null) return Results.BadRequest(new { error });
-    var match = new PadelMatch { Id = Guid.NewGuid(), OwnerId = user.Id, Name = request.Name.Trim(), Venue = Clean(request.Venue, 160), ShareCode = Guid.NewGuid().ToString("N")[..20], CreatedAt = DateTime.UtcNow };
+    var match = new PadelMatch { Id = Guid.NewGuid(), OwnerId = user.Id, Name = request.Name.Trim(), Venue = Clean(request.Venue, 500), ShareCode = Guid.NewGuid().ToString("N")[..20], CreatedAt = DateTime.UtcNow };
     foreach (var day in request.Availability) match.Days.Add(new MatchDay { Date = day.Date, Status = day.Status, From = day.From, Until = day.Until });
     db.Matches.Add(match); await db.SaveChangesAsync();
     return Results.Created($"/api/shared/{match.ShareCode}", new CreatedMatch(match.Id.ToString(), match.Name, match.ShareCode, match.CreatedAt));
@@ -132,7 +132,7 @@ app.Run();
 static string? ValidateMatch(CreateMatchRequest request)
 {
     if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 120) return "Enter a match name (up to 120 characters).";
-    if (string.IsNullOrWhiteSpace(request.Venue) || request.Venue.Length > 160) return "Enter a venue (up to 160 characters).";
+    if (string.IsNullOrWhiteSpace(request.Venue) || request.Venue.Length > 500) return "Choose at least one location (up to 500 characters).";
     if (request.Availability is null || request.Availability.Count == 0 || request.Availability.Count > 31) return "Choose between 1 and 31 match dates.";
     return ValidateAvailability(request.Availability, requireStatus: true);
 }
