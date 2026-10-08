@@ -8,8 +8,10 @@ public sealed class ApiClient(HttpClient http, IJSRuntime js)
 {
     private const string TokenKey = "padel-match-sync-token";
     private const string NameKey = "padel-match-sync-name";
+    private const string CityKey = "padel-match-sync-city";
     private string? token;
     public string? DisplayName { get; private set; }
+    public string City { get; private set; } = "Bucharest";
     public bool IsSignedIn => !string.IsNullOrWhiteSpace(token);
     private string ApiBase => (http.BaseAddress?.ToString() ?? "").TrimEnd('/');
     private HttpClient Client()
@@ -20,7 +22,7 @@ public sealed class ApiClient(HttpClient http, IJSRuntime js)
     }
     public async Task RestoreAsync()
     {
-        try { token = await js.InvokeAsync<string?>("localStorage.getItem", TokenKey); DisplayName = await js.InvokeAsync<string?>("localStorage.getItem", NameKey); }
+        try { token = await js.InvokeAsync<string?>("localStorage.getItem", TokenKey); DisplayName = await js.InvokeAsync<string?>("localStorage.getItem", NameKey); City = await js.InvokeAsync<string?>("localStorage.getItem", CityKey) ?? "Bucharest"; }
         catch (InvalidOperationException) { }
     }
     public async Task<AuthResult> RegisterAsync(string name, string email, string password) => await AuthenticateAsync("api/auth/register", new { name, email, password });
@@ -32,16 +34,41 @@ public sealed class ApiClient(HttpClient http, IJSRuntime js)
         if (!response.IsSuccessStatusCode) return new(false, await ReadError(response));
         var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
         if (result is null) return new(false, "The server returned an empty response.");
-        token = result.Token; DisplayName = result.Name;
+        token = result.Token; DisplayName = result.Name; City = result.City ?? "Bucharest";
         await js.InvokeVoidAsync("localStorage.setItem", TokenKey, token);
         await js.InvokeVoidAsync("localStorage.setItem", NameKey, DisplayName);
+        await js.InvokeVoidAsync("localStorage.setItem", CityKey, City);
         return new(true, "Signed in.");
+    }
+    public async Task<(bool Ok, string Message, AccountProfile? Profile)> GetProfileAsync()
+    {
+        using var response = await Client().GetAsync("api/account");
+        if (!response.IsSuccessStatusCode) return (false, await ReadError(response), null);
+        var profile = await response.Content.ReadFromJsonAsync<AccountProfile>();
+        if (profile is not null) await ApplyProfileAsync(profile);
+        return (profile is not null, profile is null ? "The server returned an empty response." : "", profile);
+    }
+    public async Task<(bool Ok, string Message)> SaveProfileAsync(string name, string city)
+    {
+        using var response = await Client().PutAsJsonAsync("api/account", new { name, city });
+        if (!response.IsSuccessStatusCode) return (false, await ReadError(response));
+        var profile = await response.Content.ReadFromJsonAsync<AccountProfile>();
+        if (profile is null) return (false, "The server returned an empty response.");
+        await ApplyProfileAsync(profile);
+        return (true, "Account settings saved.");
+    }
+    private async Task ApplyProfileAsync(AccountProfile profile)
+    {
+        DisplayName = profile.Name; City = profile.City;
+        await js.InvokeVoidAsync("localStorage.setItem", NameKey, DisplayName);
+        await js.InvokeVoidAsync("localStorage.setItem", CityKey, City);
     }
     public async Task SignOutAsync()
     {
-        token = null; DisplayName = null;
+        token = null; DisplayName = null; City = "Bucharest";
         await js.InvokeVoidAsync("localStorage.removeItem", TokenKey);
         await js.InvokeVoidAsync("localStorage.removeItem", NameKey);
+        await js.InvokeVoidAsync("localStorage.removeItem", CityKey);
     }
     public async Task<(bool Ok, string Message, CreatedMatch? Match)> CreateMatchAsync(CreateMatchRequest request)
     {
@@ -74,7 +101,8 @@ public sealed class ApiClient(HttpClient http, IJSRuntime js)
 }
 
 public sealed record AuthResult(bool Ok, string Message);
-public sealed record AuthResponse(string Token, string Name, string Email);
+public sealed record AuthResponse(string Token, string Name, string Email, string? City = null);
+public sealed record AccountProfile(string Name, string Email, string City);
 public sealed record ApiError(string Error);
 public sealed record AvailabilityInput(DateOnly Date, string Status, TimeOnly? From, TimeOnly? Until);
 public sealed record CreateMatchRequest(string Name, string? Venue, IReadOnlyList<AvailabilityInput> Availability);

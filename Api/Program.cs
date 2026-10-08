@@ -30,7 +30,23 @@ using (var scope = app.Services.CreateScope())
     if (postgres)
         foreach (var statement in DatabaseSchema.Script.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             await database.ExecuteSqlRawAsync(statement);
-    else await database.EnsureCreatedAsync();
+    else
+    {
+        await database.EnsureCreatedAsync();
+        var sqliteConnection = database.GetDbConnection();
+        await database.OpenConnectionAsync();
+        try
+        {
+            using var command = sqliteConnection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(\"Users\")";
+            using var reader = await command.ExecuteReaderAsync();
+            var hasCity = false;
+            while (await reader.ReadAsync()) if (reader.GetString(1) == "City") hasCity = true;
+            await reader.DisposeAsync();
+            if (!hasCity) await database.ExecuteSqlRawAsync("ALTER TABLE \"Users\" ADD COLUMN \"City\" TEXT NOT NULL DEFAULT 'Bucharest'");
+        }
+        finally { await database.CloseConnectionAsync(); }
+    }
 }
 
 app.UseCors();
@@ -43,9 +59,9 @@ app.MapPost("/api/auth/register", async (RegisterRequest request, MatchDb db, IC
     if (email is null || email.Length > 254 || !email.Contains('@')) return Results.BadRequest(new { error = "Enter a valid email address." });
     if (request.Password is null || request.Password.Length < 10 || request.Password.Length > 200) return Results.BadRequest(new { error = "Use a password between 10 and 200 characters." });
     if (await db.Users.AnyAsync(user => user.Email == email)) return Results.Conflict(new { error = "An account with this email already exists." });
-    var user = new User { Id = Guid.NewGuid(), Name = name, Email = email, PasswordHash = Passwords.Hash(request.Password), CreatedAt = DateTime.UtcNow };
+    var user = new User { Id = Guid.NewGuid(), Name = name, Email = email, City = "Bucharest", PasswordHash = Passwords.Hash(request.Password), CreatedAt = DateTime.UtcNow };
     db.Users.Add(user); await db.SaveChangesAsync();
-    return Results.Ok(new AuthResponse(Tokens.Create(user, config), user.Name, user.Email));
+    return Results.Ok(new AuthResponse(Tokens.Create(user, config), user.Name, user.Email, user.City));
 });
 
 app.MapPost("/api/auth/login", async (LoginRequest request, MatchDb db, IConfiguration config) =>
@@ -53,7 +69,24 @@ app.MapPost("/api/auth/login", async (LoginRequest request, MatchDb db, IConfigu
     var email = request.Email?.Trim().ToLowerInvariant();
     var user = email is null ? null : await db.Users.SingleOrDefaultAsync(item => item.Email == email);
     if (user is null || request.Password is null || !Passwords.Verify(request.Password, user.PasswordHash)) return Results.Json(new { error = "Email or password is incorrect." }, statusCode: StatusCodes.Status401Unauthorized);
-    return Results.Ok(new AuthResponse(Tokens.Create(user, config), user.Name, user.Email));
+    return Results.Ok(new AuthResponse(Tokens.Create(user, config), user.Name, user.Email, user.City));
+});
+
+app.MapGet("/api/account", async (HttpRequest http, MatchDb db, IConfiguration config) =>
+{
+    var user = await Tokens.UserAsync(http, db, config); if (user is null) return Results.Unauthorized();
+    return Results.Ok(new AccountProfile(user.Name, user.Email, user.City));
+});
+
+app.MapPut("/api/account", async (AccountUpdateRequest request, HttpRequest http, MatchDb db, IConfiguration config) =>
+{
+    var user = await Tokens.UserAsync(http, db, config); if (user is null) return Results.Unauthorized();
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 80) return Results.BadRequest(new { error = "Enter a name (up to 80 characters)." });
+    if (!Cities.Allowed.Contains(request.City)) return Results.BadRequest(new { error = "Choose a city from the list." });
+    user.Name = name; user.City = request.City;
+    await db.SaveChangesAsync();
+    return Results.Ok(new AccountProfile(user.Name, user.Email, user.City));
 });
 
 app.MapPost("/api/matches", async (CreateMatchRequest request, HttpRequest http, MatchDb db, IConfiguration config) =>
@@ -137,6 +170,7 @@ static class DatabaseSchema
 {
 public const string Script = """
 CREATE TABLE IF NOT EXISTS "Users" ("Id" uuid PRIMARY KEY, "Name" text NOT NULL, "Email" text NOT NULL, "PasswordHash" text NOT NULL, "CreatedAt" timestamp with time zone NOT NULL);
+ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "City" text NOT NULL DEFAULT 'Bucharest';
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_Users_Email" ON "Users" ("Email");
 CREATE TABLE IF NOT EXISTS "Matches" ("Id" uuid PRIMARY KEY, "OwnerId" uuid NOT NULL REFERENCES "Users" ("Id") ON DELETE CASCADE, "Name" text NOT NULL, "Venue" text NULL, "ShareCode" text NOT NULL, "CreatedAt" timestamp with time zone NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_Matches_ShareCode" ON "Matches" ("ShareCode");
@@ -153,11 +187,18 @@ record LoginRequest(string? Email, string? Password);
 record ResponseRequest(string? Name, string? Email, List<AvailabilityInput>? Availability);
 record CreateMatchRequest(string Name, string? Venue, List<AvailabilityInput> Availability);
 record AvailabilityInput(DateOnly Date, string Status, TimeOnly? From, TimeOnly? Until);
-record AuthResponse(string Token, string Name, string Email);
+record AuthResponse(string Token, string Name, string Email, string City);
+record AccountProfile(string Name, string Email, string City);
+record AccountUpdateRequest(string? Name, string City);
 record CreatedMatch(string Id, string Name, string ShareCode, DateTime CreatedAt);
 record MatchSummary(string Id, string Name, string? Venue, string ShareCode, DateTime CreatedAt, IReadOnlyList<AvailabilityInput> Availability, int ResponseCount);
 record SharedMatch(string Name, string? Venue, string OrganizerName, DateTime CreatedAt, IReadOnlyList<AvailabilityInput> Availability, IReadOnlyList<SharedResponse> Responses);
 record SharedResponse(string Name, DateTime SubmittedAt, IReadOnlyList<AvailabilityInput> Availability);
+
+static class Cities
+{
+    public static readonly HashSet<string> Allowed = ["Bucharest", "Cluj-Napoca", "Timișoara", "Iași", "Brașov", "Constanța", "Sibiu", "Oradea", "London", "Paris", "Barcelona", "Madrid"];
+}
 
 static class Passwords
 {
@@ -216,7 +257,7 @@ sealed class MatchDb(DbContextOptions<MatchDb> options) : DbContext(options)
         model.Entity<MatchDay>().HasIndex(day => new { day.MatchId, day.Date }).IsUnique(); model.Entity<ResponseDay>().HasIndex(day => new { day.ResponseId, day.Date }).IsUnique();
     }
 }
-sealed class User { public Guid Id { get; set; } public string Name { get; set; } = ""; public string Email { get; set; } = ""; public string PasswordHash { get; set; } = ""; public DateTime CreatedAt { get; set; } }
+sealed class User { public Guid Id { get; set; } public string Name { get; set; } = ""; public string Email { get; set; } = ""; public string City { get; set; } = "Bucharest"; public string PasswordHash { get; set; } = ""; public DateTime CreatedAt { get; set; } }
 sealed class PadelMatch { public Guid Id { get; set; } public Guid OwnerId { get; set; } public User Owner { get; set; } = null!; public string Name { get; set; } = ""; public string? Venue { get; set; } public string ShareCode { get; set; } = ""; public DateTime CreatedAt { get; set; } public List<MatchDay> Days { get; set; } = []; public List<PlayerResponse> Responses { get; set; } = []; }
 sealed class MatchDay { public int Id { get; set; } public Guid MatchId { get; set; } public PadelMatch Match { get; set; } = null!; public DateOnly Date { get; set; } public string Status { get; set; } = ""; public TimeOnly? From { get; set; } public TimeOnly? Until { get; set; } }
 sealed class PlayerResponse { public Guid Id { get; set; } public Guid MatchId { get; set; } public PadelMatch Match { get; set; } = null!; public string Name { get; set; } = ""; public string? Email { get; set; } public DateTime SubmittedAt { get; set; } public List<ResponseDay> Days { get; set; } = []; }

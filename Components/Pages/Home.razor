@@ -1,5 +1,8 @@
 @page "/"
+@implements IAsyncDisposable
 @using System.Globalization
+@using System.Net.Http.Json
+@using System.Text.Json.Serialization
 @inject PadelMatchSync.Services.ApiClient Api
 @inject NavigationManager Navigation
 
@@ -8,26 +11,27 @@
 <div class="dashboard">
     <aside class="sidebar">
         <a class="brand" href="./" aria-label="Padel Match Sync home"><img class="brand-mark" src="padel-match-sync-icon.svg" alt="" /><span class="brand-name">Padel Match Sync</span></a>
-        <div class="team-switch"><div class="team-avatar">🎾</div><div><strong>Weekend crew</strong><small>4 players</small></div><span class="chevron">⌄</span></div>
+        <div class="team-switch"><div class="team-avatar">🎾</div><div><strong>@CrewName</strong><small>4 players</small></div><span class="chevron">⌄</span></div>
         <div class="nav-label">WORKSPACE</div>
         <nav class="side-nav" aria-label="Main navigation">
             <a class="nav-item active" href="#today"><span class="nav-icon">▦</span>My day</a>
             <a class="nav-item" href="#schedule"><span class="nav-icon">◷</span>Schedule</a>
             <a class="nav-item" href="#players"><span class="nav-icon">♧</span>Players <span class="nav-count">4</span></a>
         </nav>
-        <div class="sidebar-bottom"><div class="weather-card"><span class="weather-icon">☀</span><div><strong>Great day to play</strong><small>24° · Clear skies</small></div></div><div class="profile"><div class="profile-avatar">A</div><div><strong>Alex Marin</strong><small>Organizer</small></div><button class="more" aria-label="More options">···</button></div></div>
+        <div class="sidebar-bottom"><div class="weather-card"><span class="weather-icon">@WeatherIcon</span><div><strong>@WeatherHeadline</strong><small>@WeatherDetails</small></div></div><button class="profile profile-button" @onclick="ToggleAccount" aria-label="Account settings"><span class="profile-avatar">@UserInitial</span><span class="profile-copy"><strong>@CurrentDisplayName</strong><small>@(Api.IsSignedIn ? "Your account" : "Personal planner")</small></span><span class="more">···</span></button></div>
     </aside>
 
     <main class="main-content" id="today">
-        <header class="topbar"><a class="mobile-brand" href="./" aria-label="Padel Match Sync home"><img src="padel-match-sync-icon.svg" alt="" /><span>Padel Match Sync</span></a><div class="breadcrumb">Weekend crew <span>/</span> <strong>My day</strong></div><div class="top-actions"><button class="account-button" @onclick="ToggleAccount">@(Api.IsSignedIn ? Api.DisplayName : "Sign in")</button><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">@(Api.DisplayName?.FirstOrDefault() ?? 'A')</div></div></header>
+        <header class="topbar"><a class="mobile-brand" href="./" aria-label="Padel Match Sync home"><img src="padel-match-sync-icon.svg" alt="" /><span>Padel Match Sync</span></a><div class="breadcrumb">@CrewName <span>/</span> <strong>My day</strong></div><div class="top-actions"><button class="account-button" @onclick="ToggleAccount">@(Api.IsSignedIn ? Api.DisplayName : "Sign in")</button><button class="icon-button notification" aria-label="Notifications">♧<i></i></button><div class="top-avatar">@UserInitial</div></div></header>
         <div class="content-wrap">
-            <div class="page-heading"><div><div class="eyebrow">SATURDAY, OCTOBER 10, 2026 <span class="sun">☀</span></div><h1>Make today <em>count.</em></h1><p class="subheading">Your match day, all in one place.</p></div><button class="primary-button" @onclick="OpenPlanner"><span>＋</span> Plan a match</button></div>
+            <div class="page-heading"><div><div class="eyebrow">SATURDAY, OCTOBER 10, 2026 <span class="sun">☀</span></div><h1>Make today <em>count.</em></h1><p class="subheading">Your match day, all in one place, @CurrentDisplayName.</p></div><button class="primary-button" @onclick="OpenPlanner"><span>＋</span> Plan a match</button></div>
+            <div class="weather-strip" aria-live="polite"><span class="weather-strip-icon">@WeatherIcon</span><div><strong>@WeatherHeadline</strong><small>@WeatherDetails</small></div><span class="weather-source">LOCAL CONDITIONS</span></div>
 
             <section class="hero-card" aria-label="Next match">
                 <div class="hero-top"><span class="live-label"><span></span> NEXT MATCH</span><button class="dots-button" aria-label="Match options">···</button></div>
                 <div class="match-main"><div><div class="match-time">10:30 <span>AM</span></div><div class="match-date">Saturday, October 10</div></div><div class="match-divider"></div><div class="match-location"><div class="court-icon">⌖</div><div><strong>Padel House</strong><small>Court 3 · 60 min</small></div></div><div class="countdown"><strong>02<span>days</span></strong><small>until first serve</small></div></div>
-                <div class="hero-bottom"><div class="attending"><div class="avatar-stack"><span class="player p1">A</span><span class="player p2">M</span><span class="player p3">J</span><span class="player p4">S</span></div><span><strong>4 players</strong> are in</span></div><button class="text-button" @onclick="ToggleDetails">@(showDetails ? "Hide details" : "Match details") <span>→</span></button></div>
-                @if (showDetails) { <div class="match-details"><div><small>TEAMS</small><strong>Alex &amp; Maya <span>vs</span> Jordan &amp; Sam</strong></div><div><small>NOTES</small><strong>Bring a new can of balls</strong></div></div> }
+                <div class="hero-bottom"><div class="attending"><div class="avatar-stack"><span class="player p1">@UserInitial</span><span class="player p2">M</span><span class="player p3">J</span><span class="player p4">S</span></div><span><strong>4 players</strong> are in</span></div><button class="text-button" @onclick="ToggleDetails">@(showDetails ? "Hide details" : "Match details") <span>→</span></button></div>
+                @if (showDetails) { <div class="match-details"><div><small>TEAMS</small><strong>@CurrentDisplayName &amp; your crew</strong></div><div><small>NOTES</small><strong>Bring a new can of balls</strong></div></div> }
             </section>
 
             @if (Api.IsSignedIn)
@@ -143,7 +147,13 @@
 {
     <div class="modal-backdrop" @onclick="ToggleAccount"><section class="planner-modal auth-modal" @onclick:stopPropagation="true" aria-label="Account">
         <button class="modal-close" @onclick="ToggleAccount" aria-label="Close">×</button><div class="modal-kicker">YOUR MATCHES, YOUR CREW</div><h2>@(Api.IsSignedIn ? $"Hi, {Api.DisplayName}" : accountMode == "register" ? "Create your account" : "Welcome back")</h2>
-        @if (Api.IsSignedIn) { <p>Your matches are saved securely to your account.</p><button class="primary-button modal-submit" @onclick="SignOut">Sign out</button> }
+        @if (Api.IsSignedIn) { <p>Your profile and match preferences are saved to your account.</p>
+            <label>Your name<input @bind="profileName" autocomplete="name" maxlength="80" /></label>
+            <label>City<select value="@selectedCity" @onchange="CityChanged"><option value="">Choose your city</option>@foreach (var city in AvailableCities) { <option value="@city.Name">@city.Name</option> }</select></label>
+            @if (!string.IsNullOrWhiteSpace(profileMessage)) { <div class="@(profileSaved ? "profile-success" : "range-message error")">@profileMessage</div> }
+            <button class="primary-button modal-submit" @onclick="SaveProfile" disabled="@profileBusy">@(profileBusy ? "Saving…" : "Save settings") <span>→</span></button>
+            <button class="auth-switch" @onclick="SignOut">Sign out</button>
+        }
         else { @if (accountMode == "register") { <label>Your name<input @bind="accountName" autocomplete="name" placeholder="Your name" /></label> }<label>Email<input type="email" @bind="accountEmail" autocomplete="email" placeholder="you@example.com" /></label><label>Password<input type="password" @bind="accountPassword" autocomplete="@(accountMode == "register" ? "new-password" : "current-password")" placeholder="@(accountMode == "register" ? "At least 10 characters" : "Your password")" /></label>
             @if (!string.IsNullOrWhiteSpace(accountError)) { <div class="range-message error">@accountError</div> }
             <button class="primary-button modal-submit" @onclick="Authenticate" disabled="@accountBusy">@(accountBusy ? "Please wait…" : accountMode == "register" ? "Create account" : "Sign in") <span>→</span></button><button class="auth-switch" @onclick="SwitchAccountMode">@(accountMode == "register" ? "Already have an account? Sign in" : "New here? Create an account")</button> }
@@ -157,12 +167,24 @@
     private bool useDateRange;
     private bool showAccount;
     private bool accountBusy;
+    private bool profileBusy;
+    private bool profileSaved;
     private bool saving;
     private string accountMode = "login";
     private string accountName = "";
     private string accountEmail = "";
     private string accountPassword = "";
     private string accountError = "";
+    private string profileName = "";
+    private string selectedCity = "Bucharest";
+    private string profileMessage = "";
+    private string? weatherError;
+    private double? temperatureC;
+    private DateTime? cityLocalTime;
+    private string weatherCondition = "Loading local weather…";
+    private DateTime lastWeatherUpdate = DateTime.MinValue;
+    private CancellationTokenSource? clockCancellation;
+    private static readonly HttpClient WeatherHttp = new();
     private string lastShareUrl = "";
     private List<PadelMatchSync.Services.MatchSummary> myMatches = [];
     private string matchName = "Saturday rally";
@@ -174,6 +196,22 @@
     private string venue = "Padel House";
     private string? toastMessage;
     private DateTime SelectedDay = new(2026, 10, 10);
+    private string CurrentDisplayName => string.IsNullOrWhiteSpace(Api.DisplayName) ? "Alin" : Api.DisplayName;
+    private string CrewName => $"{CurrentDisplayName}'s crew";
+    private char UserInitial => CurrentDisplayName.FirstOrDefault('A');
+    private string WeatherHeadline => cityLocalTime is null ? $"{selectedCity} · local time" : $"{selectedCity} · {cityLocalTime.Value:HH:mm}";
+    private string WeatherDetails => temperatureC is null ? weatherError ?? weatherCondition : $"{Math.Round(temperatureC.Value)}°C · {weatherCondition}";
+    private string WeatherIcon => temperatureC is null ? "◷" : weatherCondition switch { "Clear skies" => "☀", "Partly cloudy" or "Cloudy" => "⛅", "Fog" => "☁", "Rain" or "Drizzle" or "Showers" => "🌧", "Snow" => "❄", "Thunderstorm" => "⛈", _ => "☀" };
+    private static readonly CityOption[] AvailableCities =
+    [
+        new("Bucharest", 44.4268, 26.1025), new("Cluj-Napoca", 46.7712, 23.6236), new("Timișoara", 45.7489, 21.2087),
+        new("Iași", 47.1585, 27.6014), new("Brașov", 45.6579, 25.6012), new("Constanța", 44.1598, 28.6348),
+        new("Sibiu", 45.7983, 24.1256), new("Oradea", 47.0465, 21.9189), new("London", 51.5072, -0.1276),
+        new("Paris", 48.8566, 2.3522), new("Barcelona", 41.3874, 2.1686), new("Madrid", 40.4168, -3.7038)
+    ];
+    private sealed record CityOption(string Name, double Latitude, double Longitude);
+    private sealed record WeatherPayload([property: JsonPropertyName("current")] WeatherCurrent Current);
+    private sealed record WeatherCurrent([property: JsonPropertyName("time")] string Time, [property: JsonPropertyName("temperature_2m")] double Temperature, [property: JsonPropertyName("weather_code")] int Code);
     private readonly HashSet<int> checkedItems = new() { 0, 1 };
     private record DayItem(string Label, DateTime Date, bool HasMatch);
     private class DayAvailability
@@ -189,18 +227,82 @@
     private bool SingleWindowInvalid => (singleDay.Status is "Available" or "Maybe") && singleDay.From >= singleDay.Until;
     private bool CanSaveAvailability => useDateRange ? IsRangeValid && IsRangeAvailabilityComplete && !RangeWindowInvalid : !string.IsNullOrEmpty(singleDay.Status) && !SingleWindowInvalid;
     private IReadOnlyList<DayItem> WeekDays => Enumerable.Range(5, 7).Select(d => new DayItem(new DateTime(2026, 10, d).ToString("ddd", CultureInfo.InvariantCulture), new DateTime(2026, 10, d), d == 10)).ToList();
-    protected override async Task OnInitializedAsync() { await Api.RestoreAsync(); if (Api.IsSignedIn) await RefreshMatches(); }
+    protected override async Task OnInitializedAsync()
+    {
+        await Api.RestoreAsync();
+        selectedCity = Api.City;
+        if (Api.IsSignedIn)
+        {
+            var profile = await Api.GetProfileAsync();
+            if (profile.Ok && profile.Profile is not null) { profileName = profile.Profile.Name; selectedCity = profile.Profile.City; }
+            await RefreshMatches();
+        }
+        clockCancellation = new CancellationTokenSource();
+        _ = RunWeatherClockAsync(clockCancellation.Token);
+    }
     private async Task RefreshMatches() { var result = await Api.GetMatchesAsync(); if (result.Ok) myMatches = result.Matches.ToList(); }
-    private void ToggleAccount() { showAccount = !showAccount; accountError = ""; }
+    private void ToggleAccount() { showAccount = !showAccount; accountError = ""; profileMessage = ""; if (Api.IsSignedIn) { profileName = Api.DisplayName ?? ""; selectedCity = Api.City; } }
     private void SwitchAccountMode() { accountMode = accountMode == "register" ? "login" : "register"; accountError = ""; }
     private async Task Authenticate()
     {
         accountBusy = true; accountError = "";
-        try { var result = accountMode == "register" ? await Api.RegisterAsync(accountName, accountEmail, accountPassword) : await Api.LoginAsync(accountEmail, accountPassword); if (!result.Ok) { accountError = result.Message; return; } showAccount = false; accountPassword = ""; await RefreshMatches(); }
+        try { var result = accountMode == "register" ? await Api.RegisterAsync(accountName, accountEmail, accountPassword) : await Api.LoginAsync(accountEmail, accountPassword); if (!result.Ok) { accountError = result.Message; return; } profileName = Api.DisplayName ?? ""; selectedCity = Api.City; showAccount = false; accountPassword = ""; await RefreshWeatherAsync(); await RefreshMatches(); }
         catch (Exception ex) { accountError = $"Could not reach the Padel Match Sync API. Check that it is deployed and configured. ({ex.Message})"; }
         finally { accountBusy = false; }
     }
-    private async Task SignOut() { await Api.SignOutAsync(); myMatches.Clear(); showAccount = false; }
+    private async Task SaveProfile()
+    {
+        if (profileBusy) return;
+        profileBusy = true; profileMessage = ""; profileSaved = false;
+        try
+        {
+            var result = await Api.SaveProfileAsync(profileName, selectedCity);
+            if (!result.Ok) { profileMessage = result.Message; return; }
+            profileSaved = true; profileMessage = "Settings saved."; await RefreshWeatherAsync();
+        }
+        catch (Exception ex) { profileMessage = $"Could not save settings. ({ex.Message})"; }
+        finally { profileBusy = false; }
+    }
+    private async Task SignOut() { await Api.SignOutAsync(); profileName = ""; myMatches.Clear(); showAccount = false; }
+    private async Task CityChanged(ChangeEventArgs e)
+    {
+        selectedCity = e.Value?.ToString() ?? "Bucharest"; profileMessage = ""; await RefreshWeatherAsync();
+    }
+    private async Task RunWeatherClockAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RefreshWeatherAsync();
+            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (cityLocalTime.HasValue) cityLocalTime = cityLocalTime.Value.AddMinutes(1);
+                if (DateTime.UtcNow - lastWeatherUpdate >= TimeSpan.FromMinutes(15)) await RefreshWeatherAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+    private async Task RefreshWeatherAsync()
+    {
+        var city = AvailableCities.FirstOrDefault(item => item.Name == selectedCity) ?? AvailableCities[0];
+        var url = $"https://api.open-meteo.com/v1/forecast?latitude={city.Latitude.ToString(CultureInfo.InvariantCulture)}&longitude={city.Longitude.ToString(CultureInfo.InvariantCulture)}&current=temperature_2m,weather_code&timezone=auto";
+        try
+        {
+            var result = await WeatherHttp.GetFromJsonAsync<WeatherPayload>(url);
+            if (result is null) throw new InvalidOperationException("Weather service returned no data.");
+            cityLocalTime = DateTime.Parse(result.Current.Time, CultureInfo.InvariantCulture, DateTimeStyles.None);
+            temperatureC = result.Current.Temperature; weatherCondition = WeatherDescription(result.Current.Code); weatherError = null; lastWeatherUpdate = DateTime.UtcNow;
+        }
+        catch (Exception) { weatherError = "Weather unavailable"; weatherCondition = "Weather unavailable"; }
+        await InvokeAsync(StateHasChanged);
+    }
+    private static string WeatherDescription(int code) => code switch
+    {
+        0 => "Clear skies", 1 or 2 => "Partly cloudy", 3 => "Cloudy", 45 or 48 => "Fog", 51 or 53 or 55 or 56 or 57 => "Drizzle",
+        61 or 63 or 65 or 66 or 67 => "Rain", 71 or 73 or 75 or 77 => "Snow", 80 or 81 or 82 => "Showers", 85 or 86 => "Snow showers",
+        95 or 96 or 99 => "Thunderstorm", _ => "Current conditions"
+    };
     private void OpenPlanner() { showPlanner = true; toastMessage = null; lastShareUrl = ""; RefreshRangeDays(); }
     private void ClosePlanner() => showPlanner = false;
     private void ToggleDetails() => showDetails = !showDetails;
@@ -229,4 +331,9 @@
         finally { saving = false; }
     }
     private async Task ClearToast() { await Task.Delay(3500); toastMessage = null; await InvokeAsync(StateHasChanged); }
+    public async ValueTask DisposeAsync()
+    {
+        if (clockCancellation is null) return;
+        await clockCancellation.CancelAsync(); clockCancellation.Dispose();
+    }
 }
