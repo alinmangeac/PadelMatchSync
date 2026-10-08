@@ -141,7 +141,7 @@ static class Tokens
             var secret = config["Auth:SigningKey"]; if (string.IsNullOrEmpty(secret)) return null;
             using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret)); var expected = hmac.ComputeHash(Encoding.UTF8.GetBytes(token[0]));
             var signature = FromBase64Url(token[1]); if (!CryptographicOperations.FixedTimeEquals(expected, signature)) return null;
-            var payload = JsonSerializer.Deserialize<TokenPayload>(FromBase64Url(token[0]));
+            var payload = JsonSerializer.Deserialize<TokenPayload>(FromBase64Url(token[0]), new JsonSerializerOptions(JsonSerializerDefaults.Web));
             if (payload is null || payload.ExpiresAt < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) return null;
             return await db.Users.FindAsync(payload.UserId);
         }
