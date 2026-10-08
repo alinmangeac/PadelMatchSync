@@ -1,12 +1,12 @@
 # Padel Match Sync
 
-Padel Match Sync is a mobile-friendly Blazor WebAssembly app backed by an ASP.NET Core API and SQLite. People create their own accounts, save match plans with availability for one date or a date range, and share a private invitation link. Invitees can respond without an account.
+Padel Match Sync is a mobile-friendly Blazor WebAssembly app backed by an ASP.NET Core API and PostgreSQL. People create their own accounts, save match plans with availability for one date or a date range, and share a private invitation link. Invitees can respond without an account.
 
 ## Architecture
 
 - **Web client:** Blazor WebAssembly hosted on GitHub Pages.
 - **API:** ASP.NET Core 8 (`Api/`) for account registration, sign-in, match ownership, and public invite responses.
-- **Database:** SQLite, persisted on the API host's mounted data disk.
+- **Database:** Supabase Free PostgreSQL project. Local development can still use SQLite.
 - **Authentication:** Passwords are salted and hashed with PBKDF2-SHA256. API access tokens expire after seven days and are kept in browser local storage.
 - **Invitations:** Each match gets a random, nonsequential share code. Anyone holding that link can see the proposed days and submit availability.
 
@@ -32,7 +32,7 @@ The API allows the local Blazor development origins configured in `Api/appsettin
 "PadelMatchSync": { "ApiBaseUrl": "http://localhost:5209/" }
 ```
 
-For a containerized API, set `PAD_MATCH_SIGNING_KEY` to at least 32 random characters and run `docker compose up --build`. SQLite is stored in the named `padel-data` volume.
+For a containerized API, set `PAD_MATCH_SIGNING_KEY` to at least 32 random characters and run `docker compose up --build`. Local SQLite is stored in the named `padel-data` volume.
 
 ## Deploy
 
@@ -42,9 +42,9 @@ The existing `pages.yml` workflow publishes the static Blazor app when changes r
 
 ### API on Render
 
-`render.yaml` describes a Docker-based ASP.NET Core API service with a persistent disk for SQLite, a generated signing key, and GitHub Pages CORS access. In Render, create a Blueprint from this repository and deploy the `padel-match-sync-api` service. After it is healthy, set the GitHub repository variable `PADEL_MATCH_SYNC_API_URL` to the service's HTTPS URL and rerun the Pages deployment workflow.
+`render.yaml` describes a Docker-based ASP.NET Core API on Render's Free plan, with a generated signing key and GitHub Pages CORS access. It intentionally uses no disk. In Supabase, create a Free PostgreSQL project and copy its session-pooler connection URI. In Render, create a Blueprint from this repository and provide that URI for `ConnectionStrings__Matches` when prompted. The API creates its tables in the Supabase database at startup. After it is healthy, set the GitHub repository variable `PADEL_MATCH_SYNC_API_URL` to the service's HTTPS URL and rerun the Pages deployment workflow.
 
-The API must be available over HTTPS in production. Keep the signing key private and back up the mounted SQLite file. The Render Blueprint uses a persistent-disk plan so saved account and match data survives service restarts.
+The API must be available over HTTPS in production. Keep the signing key and database URI private. Render Free services sleep after 15 minutes of inactivity, and Supabase Free projects may pause after a week of low activity. Supabase Free includes 500 MB of database storage and does not include automatic backups; export important data periodically.
 
 ## Important scope
 

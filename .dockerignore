@@ -1,0 +1,6 @@
+**/bin/
+**/obj/
+**/publish-output/
+.git/
+.dotnet/
+.nuget/
