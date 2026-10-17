@@ -1,5 +1,35 @@
 @inherits LayoutComponentBase
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
-<div class="app-shell">
+<div class="app-shell @(isDark ? "theme-dark" : "")">
+    <button class="theme-toggle" type="button" aria-label="@(isDark ? "Switch to light theme" : "Switch to dark theme")" title="@(isDark ? "Switch to light theme" : "Switch to dark theme")" @onclick="ToggleTheme">
+        <span aria-hidden="true">@(isDark ? "☀" : "☾")</span>
+        <span class="theme-toggle-label">@(isDark ? "Light mode" : "Dark mode")</span>
+    </button>
     @Body
 </div>
+
+@code {
+    private bool isDark;
+    private IJSObjectReference? module;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "./theme.js");
+        isDark = await module.InvokeAsync<bool>("loadTheme");
+        StateHasChanged();
+    }
+
+    private async Task ToggleTheme()
+    {
+        isDark = !isDark;
+        if (module is not null) await module.InvokeVoidAsync("saveTheme", isDark);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null) await module.DisposeAsync();
+    }
+}
