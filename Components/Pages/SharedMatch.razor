@@ -57,6 +57,8 @@
 
         // Each submitted response is a participant. A response has one entry per
         // proposed date; absent entries are not available on that date.
+        // A participant's response is authoritative for their availability. Organizer
+        // dates are the proposed dates to show, not an extra participant constraint.
         var responseDayMaps = match.Responses
             .Select(response => response.Availability.GroupBy(day => day.Date)
                 .ToDictionary(group => group.Key, group => group.Last()))
@@ -65,18 +67,15 @@
         foreach (var organizerDay in match.Availability.Where(day => day.Status == "Available" && day.From is not null && day.Until is not null))
         {
             var date = organizerDay.Date;
-            var participants = new List<AvailabilityInput> { organizerDay };
-            var everyoneRespondedAvailable = true;
+            var participants = new List<AvailabilityInput>();
             foreach (var days in responseDayMaps)
             {
-                if (!days.TryGetValue(date, out var day) || day.Status is not ("Available" or "Maybe") || day.From is null || day.Until is null)
-                {
-                    everyoneRespondedAvailable = false;
-                    break;
-                }
+                if (!days.TryGetValue(date, out var day) || day.Status != "Available" || day.From is null || day.Until is null) continue;
                 participants.Add(day);
             }
-            if (!everyoneRespondedAvailable) continue;
+            // Do not show a result until every submitted response is explicitly
+            // available that day; Maybe and Unavailable are not confirmed availability.
+            if (participants.Count != match.Responses.Count) continue;
             var start = participants.Max(day => day.From!.Value);
             var end = participants.Min(day => day.Until!.Value);
             if (start >= end) continue;
