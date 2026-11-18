@@ -16,6 +16,23 @@
                 @if (!string.IsNullOrWhiteSpace(error)) { <div class="range-message error">@error</div> }@if (!string.IsNullOrWhiteSpace(success)) { <div class="success-message">✓ @success</div> }
                 <button class="primary-button modal-submit" @onclick="Submit" disabled="@(!CanSubmit || submitting)">@(submitting ? "Sending…" : "Send my availability") <span>→</span></button>
             </div>
+            @if (match.Responses.Count > 0)
+            {
+                <div class="shared-options">
+                    <h2>Common slots</h2>
+                    @if (CommonSlots.Count == 0)
+                    {
+                        <p>No common 30-minute or 2-hour slot yet. Everyone needs to submit availability for the same day.</p>
+                    }
+                    else
+                    {
+                        @foreach (var slot in CommonSlots)
+                        {
+                            <div class="shared-day"><strong>@slot.Date.ToString("ddd, MMM d")</strong><span>@slot.From.ToString("HH:mm")–@slot.Until.ToString("HH:mm") · @slot.DurationLabel</span></div>
+                        }
+                    }
+                </div>
+            }
             @if (match.Responses.Count > 0) { <div class="shared-options"><h2>Responses (@match.Responses.Count)</h2>@foreach (var response in match.Responses) { <div class="shared-response"><strong>@response.Name</strong>@foreach (var day in response.Availability) { <span>@day.Date.ToString("ddd, MMM d"): @day.Status@if (day.From is not null) { <text> · @day.From–@day.Until</text> }</span> }</div> }</div> }
         </section>
     }
@@ -30,9 +47,46 @@
     private string success = "";
     private bool loading = true;
     private bool submitting;
+    private IReadOnlyList<CommonSlot> CommonSlots => FindCommonSlots();
     private static bool IsHalfHour(TimeOnly time) => time.Ticks % (TimeSpan.TicksPerMinute * 30) == 0;
     private static readonly string[] TimeOptions = Enumerable.Range(0, 48).Select(index => TimeOnly.MinValue.AddMinutes(index * 30).ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)).ToArray();
     private bool CanSubmit => match is not null && !string.IsNullOrWhiteSpace(playerName) && responseDays.Count > 0 && responseDays.All(day => !string.IsNullOrWhiteSpace(day.Status) && (day.Status is not ("Available" or "Maybe") || day.From < day.Until && IsHalfHour(day.From) && IsHalfHour(day.Until)));
+    private IReadOnlyList<CommonSlot> FindCommonSlots()
+    {
+        if (match is null || match.Responses.Count == 0) return [];
+
+        var responseDayMaps = match.Responses
+            .Select(response => response.Availability.ToDictionary(day => day.Date))
+            .ToList();
+        var slots = new List<CommonSlot>();
+        foreach (var organizerDay in match.Availability.Where(day => day.Status == "Available" && day.From is not null && day.Until is not null))
+        {
+            var date = organizerDay.Date;
+            if (responseDayMaps.Any(days => !days.TryGetValue(date, out var day) || day.Status is not ("Available" or "Maybe") || day.From is null || day.Until is null)) continue;
+
+            var participants = new List<AvailabilityInput> { organizerDay };
+            participants.AddRange(responseDayMaps.Select(days => days[date]));
+            var start = participants.Max(day => day.From!.Value);
+            var end = participants.Min(day => day.Until!.Value);
+            if (start >= end) continue;
+
+            // Enumerate on the half-hour grid, then report only a full 30-minute or 2-hour
+            // interval that every participant can attend. Long overlaps are represented
+            // by the earliest matching 2-hour slot, plus matching half-hour options.
+            if (start.AddMinutes(120) <= end)
+            {
+                slots.Add(new(date, start, start.AddMinutes(120), "2 hours"));
+                for (var at = start; at.AddMinutes(30) <= end; at = at.AddMinutes(30))
+                    slots.Add(new(date, at, at.AddMinutes(30), "30 minutes"));
+            }
+            else
+            {
+                for (var at = start; at.AddMinutes(30) <= end; at = at.AddMinutes(30))
+                    slots.Add(new(date, at, at.AddMinutes(30), "30 minutes"));
+            }
+        }
+        return slots;
+    }
     protected override async Task OnParametersSetAsync()
     {
         loading = true; await Api.RestoreAsync();
@@ -50,4 +104,5 @@
     private sealed class ResponseDayInput { public DateTime Date { get; set; } public string Status { get; set; } = ""; public TimeOnly From { get; set; } = new(17, 0); public TimeOnly Until { get; set; } = new(20, 0);
         public string FromText { get => From.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture); set { if (TimeOnly.TryParseExact(value, "HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var time)) From = time; } }
         public string UntilText { get => Until.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture); set { if (TimeOnly.TryParseExact(value, "HH:mm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var time)) Until = time; } } }
+    private sealed record CommonSlot(DateOnly Date, TimeOnly From, TimeOnly Until, string DurationLabel);
 }
