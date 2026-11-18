@@ -22,7 +22,7 @@
                     <h2>Common slots</h2>
                     @if (CommonSlots.Count == 0)
                     {
-                        <p>No common 30-minute or 2-hour slot yet. Everyone needs to submit availability for the same day.</p>
+                        <p>No common 1½-hour or 2-hour slot yet. Everyone needs to be available on the same day.</p>
                     }
                     else
                     {
@@ -55,35 +55,38 @@
     {
         if (match is null || match.Responses.Count == 0) return [];
 
+        // Each submitted response is a participant. A response has one entry per
+        // proposed date; absent entries are not available on that date.
         var responseDayMaps = match.Responses
-            .Select(response => response.Availability.ToDictionary(day => day.Date))
+            .Select(response => response.Availability.GroupBy(day => day.Date)
+                .ToDictionary(group => group.Key, group => group.Last()))
             .ToList();
         var slots = new List<CommonSlot>();
         foreach (var organizerDay in match.Availability.Where(day => day.Status == "Available" && day.From is not null && day.Until is not null))
         {
             var date = organizerDay.Date;
-            if (responseDayMaps.Any(days => !days.TryGetValue(date, out var day) || day.Status is not ("Available" or "Maybe") || day.From is null || day.Until is null)) continue;
-
             var participants = new List<AvailabilityInput> { organizerDay };
-            participants.AddRange(responseDayMaps.Select(days => days[date]));
+            var everyoneRespondedAvailable = true;
+            foreach (var days in responseDayMaps)
+            {
+                if (!days.TryGetValue(date, out var day) || day.Status is not ("Available" or "Maybe") || day.From is null || day.Until is null)
+                {
+                    everyoneRespondedAvailable = false;
+                    break;
+                }
+                participants.Add(day);
+            }
+            if (!everyoneRespondedAvailable) continue;
             var start = participants.Max(day => day.From!.Value);
             var end = participants.Min(day => day.Until!.Value);
             if (start >= end) continue;
 
-            // Enumerate on the half-hour grid, then report only a full 30-minute or 2-hour
-            // interval that every participant can attend. Long overlaps are represented
-            // by the earliest matching 2-hour slot, plus matching half-hour options.
-            if (start.AddMinutes(120) <= end)
-            {
-                slots.Add(new(date, start, start.AddMinutes(120), "2 hours"));
-                for (var at = start; at.AddMinutes(30) <= end; at = at.AddMinutes(30))
-                    slots.Add(new(date, at, at.AddMinutes(30), "30 minutes"));
-            }
-            else
-            {
-                for (var at = start; at.AddMinutes(30) <= end; at = at.AddMinutes(30))
-                    slots.Add(new(date, at, at.AddMinutes(30), "30 minutes"));
-            }
+            // Availability is recorded on a half-hour grid. Show each valid 90-minute
+            // window and each valid 2-hour window within the shared overlap.
+            for (var at = start; at.AddMinutes(90) <= end; at = at.AddMinutes(30))
+                slots.Add(new(date, at, at.AddMinutes(90), "1½ hours"));
+            for (var at = start; at.AddMinutes(120) <= end; at = at.AddMinutes(30))
+                slots.Add(new(date, at, at.AddMinutes(120), "2 hours"));
         }
         return slots;
     }
